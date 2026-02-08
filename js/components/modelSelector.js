@@ -2,10 +2,10 @@
  * ModelSelector - Dropdown component for selecting Ollama models
  */
 
-import { ollamaService } from '../services/ollamaService.js?v=19';
-import { chatService } from '../services/chatService.js?v=19';
-import { storageService } from '../services/storageService.js?v=19';
-import { eventBus, Events } from '../utils/eventBus.js?v=19';
+import { ollamaService } from '../services/ollamaService.js?v=20';
+import { chatService } from '../services/chatService.js?v=20';
+import { storageService } from '../services/storageService.js?v=20';
+import { eventBus, Events } from '../utils/eventBus.js?v=20';
 
 class ModelSelector {
     constructor(containerId) {

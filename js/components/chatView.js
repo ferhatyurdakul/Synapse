@@ -2,12 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=19';
-import { ollamaService } from '../services/ollamaService.js?v=19';
-import { titleService } from '../services/titleService.js?v=19';
-import { eventBus, Events } from '../utils/eventBus.js?v=19';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=19';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=19';
+import { chatService } from '../services/chatService.js?v=20';
+import { ollamaService } from '../services/ollamaService.js?v=20';
+import { titleService } from '../services/titleService.js?v=20';
+import { eventBus, Events } from '../utils/eventBus.js?v=20';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=20';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=20';
+import { getModelParams } from './settingsPanel.js?v=20';
 
 class ChatView {
     constructor(containerId) {
@@ -152,8 +153,8 @@ class ChatView {
         try {
             const messages = chatService.getMessagesForApi();
 
-            // Get context length from settings
-            const contextLength = parseInt(localStorage.getItem('synapse_context_length')) || 4096;
+            // Get model parameters from settings (per-model)
+            const modelParams = getModelParams(chat.model);
 
             await ollamaService.chat(
                 chat.model,
@@ -184,7 +185,7 @@ class ChatView {
 
                     this.scrollToBottom();
                 },
-                { options: { num_ctx: contextLength } }
+                { options: modelParams }
             );
 
             // Save final message

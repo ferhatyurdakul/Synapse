@@ -2,7 +2,7 @@
  * InputArea - User input component with send functionality
  */
 
-import { eventBus, Events } from '../utils/eventBus.js?v=19';
+import { eventBus, Events } from '../utils/eventBus.js?v=20';
 
 class InputArea {
     constructor(containerId) {

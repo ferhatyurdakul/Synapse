@@ -1,21 +1,41 @@
 /**
  * SettingsPanel - Modal component for application settings
+ * Supports per-model parameter configuration
  */
 
-import { titleService } from '../services/titleService.js?v=19';
-import { ollamaService } from '../services/ollamaService.js?v=19';
-import { eventBus, Events } from '../utils/eventBus.js?v=19';
+import { titleService } from '../services/titleService.js?v=20';
+import { ollamaService } from '../services/ollamaService.js?v=20';
+import { eventBus, Events } from '../utils/eventBus.js?v=20';
+
+// Default model parameters
+const DEFAULT_PARAMS = {
+    temperature: 0.7,
+    top_p: 0.9,
+    top_k: 40,
+    repeat_penalty: 1.1,
+    num_ctx: 4096
+};
+
+// Parameter definitions with ranges
+const PARAM_DEFS = {
+    temperature: { min: 0, max: 2, step: 0.1, label: 'Temperature', description: 'Controls randomness (higher = more creative)' },
+    top_p: { min: 0, max: 1, step: 0.05, label: 'Top P', description: 'Nucleus sampling threshold' },
+    top_k: { min: 1, max: 100, step: 1, label: 'Top K', description: 'Limits vocabulary to top K tokens' },
+    repeat_penalty: { min: 0, max: 2, step: 0.1, label: 'Repeat Penalty', description: 'Penalizes repetitive text' },
+    num_ctx: { min: 512, max: 131072, step: 512, label: 'Context Length', description: 'Token context window size' }
+};
 
 class SettingsPanel {
     constructor() {
         this.isOpen = false;
         this.models = [];
+        this.selectedModel = null;
+        this.modelContextMax = 131072;
         this.render();
         this.attachEventListeners();
     }
 
     render() {
-        // Create modal container
         const modal = document.createElement('div');
         modal.id = 'settings-modal';
         modal.className = 'settings-modal hidden';
@@ -28,23 +48,32 @@ class SettingsPanel {
                 </div>
                 <div class="settings-content">
                     <div class="settings-section">
-                        <h3>Model Settings</h3>
-                        <p class="settings-description">Configure how the AI model processes your messages.</p>
+                        <h3>Model Parameters</h3>
+                        <p class="settings-description">Configure parameters for each model. Settings are saved per-model.</p>
+                        
                         <div class="settings-field">
-                            <label for="context-length-input">Context Length</label>
-                            <div class="settings-input-group">
-                                <input type="number" id="context-length-input" class="settings-input" 
-                                    min="512" max="131072" step="512" value="4096">
-                                <span class="settings-hint">tokens (512 - 131072)</span>
-                            </div>
-                            <p class="settings-field-description">Higher values allow longer conversations but use more memory.</p>
+                            <label for="param-model-select">Configure Model</label>
+                            <select id="param-model-select" class="settings-select">
+                                <option value="">Loading models...</option>
+                            </select>
                         </div>
+
+                        <div class="settings-sliders" id="param-sliders">
+                            ${this.renderSlider('temperature')}
+                            ${this.renderSlider('top_p')}
+                            ${this.renderSlider('top_k')}
+                            ${this.renderSlider('repeat_penalty')}
+                            ${this.renderSlider('num_ctx')}
+                        </div>
+
+                        <button id="reset-params-btn" class="settings-btn secondary">Reset to Defaults</button>
                     </div>
+
                     <div class="settings-section">
-                        <h3>Title Generation</h3>
-                        <p class="settings-description">Choose which model generates chat titles automatically.</p>
+                        <h3>Application Settings</h3>
+                        <p class="settings-description">General application configuration.</p>
                         <div class="settings-field">
-                            <label for="title-model-select">Title Model</label>
+                            <label for="title-model-select">Title Generation Model</label>
                             <select id="title-model-select" class="settings-select">
                                 <option value="">Loading models...</option>
                             </select>
@@ -59,39 +88,69 @@ class SettingsPanel {
         document.body.appendChild(modal);
     }
 
+    renderSlider(param) {
+        const def = PARAM_DEFS[param];
+        const value = DEFAULT_PARAMS[param];
+        return `
+            <div class="slider-field" data-param="${param}">
+                <div class="slider-header">
+                    <label>${def.label}</label>
+                    <span class="slider-value" id="${param}-value">${value}</span>
+                </div>
+                <input type="range" 
+                    id="${param}-slider" 
+                    class="settings-slider"
+                    min="${def.min}" 
+                    max="${def.max}" 
+                    step="${def.step}" 
+                    value="${value}">
+                <p class="slider-description">${def.description}</p>
+            </div>
+        `;
+    }
+
     attachEventListeners() {
-        // Close button
-        document.getElementById('settings-close-btn').addEventListener('click', () => {
-            this.close();
-        });
+        document.getElementById('settings-close-btn').addEventListener('click', () => this.close());
+        document.querySelector('.settings-overlay').addEventListener('click', () => this.close());
+        document.getElementById('settings-save-btn').addEventListener('click', () => this.save());
+        document.getElementById('reset-params-btn').addEventListener('click', () => this.resetParams());
 
-        // Overlay click
-        document.querySelector('.settings-overlay').addEventListener('click', () => {
-            this.close();
-        });
-
-        // Save button
-        document.getElementById('settings-save-btn').addEventListener('click', () => {
-            this.save();
-        });
-
-        // Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isOpen) {
                 this.close();
             }
         });
+
+        // Model selector change - load that model's settings
+        document.getElementById('param-model-select').addEventListener('change', async (e) => {
+            const model = e.target.value;
+            if (model) {
+                this.selectedModel = model;
+                await this.loadModelSettings(model);
+            }
+        });
+
+        // Slider value updates
+        Object.keys(PARAM_DEFS).forEach(param => {
+            const slider = document.getElementById(`${param}-slider`);
+            const valueDisplay = document.getElementById(`${param}-value`);
+
+            slider.addEventListener('input', (e) => {
+                let value = parseFloat(e.target.value);
+                // Format display based on parameter type
+                if (param === 'num_ctx' || param === 'top_k') {
+                    valueDisplay.textContent = Math.round(value);
+                } else {
+                    valueDisplay.textContent = value.toFixed(param === 'top_p' ? 2 : 1);
+                }
+            });
+        });
     }
 
     async open() {
         this.isOpen = true;
-        const modal = document.getElementById('settings-modal');
-        modal.classList.remove('hidden');
-
-        // Load models
+        document.getElementById('settings-modal').classList.remove('hidden');
         await this.loadModels();
-
-        // Set current values
         this.loadCurrentSettings();
     }
 
@@ -101,62 +160,131 @@ class SettingsPanel {
     }
 
     async loadModels() {
-        const select = document.getElementById('title-model-select');
+        const paramSelect = document.getElementById('param-model-select');
+        const titleSelect = document.getElementById('title-model-select');
 
         try {
             this.models = await ollamaService.listModels();
 
-            select.innerHTML = this.models.map(model =>
+            const options = this.models.map(model =>
                 `<option value="${model.name}">${model.name}</option>`
             ).join('');
 
-            // If no models, show placeholder
-            if (this.models.length === 0) {
-                select.innerHTML = '<option value="">No models available</option>';
+            paramSelect.innerHTML = options || '<option value="">No models available</option>';
+            titleSelect.innerHTML = options || '<option value="">No models available</option>';
+
+            // Set default selected model for params
+            if (this.models.length > 0) {
+                this.selectedModel = this.models[0].name;
+                await this.loadModelSettings(this.selectedModel);
             }
         } catch (error) {
             console.error('Failed to load models:', error);
-            select.innerHTML = '<option value="">Failed to load models</option>';
+            paramSelect.innerHTML = '<option value="">Failed to load models</option>';
+            titleSelect.innerHTML = '<option value="">Failed to load models</option>';
         }
+    }
+
+    async loadModelSettings(modelName) {
+        // Get model info to find max context length
+        const modelInfo = await ollamaService.getModelInfo(modelName);
+        this.modelContextMax = modelInfo.contextLength || 131072;
+
+        // Update context length slider max
+        const ctxSlider = document.getElementById('num_ctx-slider');
+        ctxSlider.max = this.modelContextMax;
+
+        // Load saved settings for this model
+        const allSettings = this.getAllModelSettings();
+        const modelSettings = allSettings[modelName] || { ...DEFAULT_PARAMS };
+
+        // Ensure context doesn't exceed model max
+        if (modelSettings.num_ctx > this.modelContextMax) {
+            modelSettings.num_ctx = this.modelContextMax;
+        }
+
+        // Update all sliders
+        Object.keys(PARAM_DEFS).forEach(param => {
+            const slider = document.getElementById(`${param}-slider`);
+            const valueDisplay = document.getElementById(`${param}-value`);
+            const value = modelSettings[param] ?? DEFAULT_PARAMS[param];
+
+            slider.value = value;
+            if (param === 'num_ctx' || param === 'top_k') {
+                valueDisplay.textContent = Math.round(value);
+            } else {
+                valueDisplay.textContent = parseFloat(value).toFixed(param === 'top_p' ? 2 : 1);
+            }
+        });
     }
 
     loadCurrentSettings() {
         // Load title model
-        const select = document.getElementById('title-model-select');
-        const currentModel = titleService.getTitleModel();
+        const titleSelect = document.getElementById('title-model-select');
+        const currentTitleModel = titleService.getTitleModel();
 
-        // Set selected value
-        if (currentModel && select.querySelector(`option[value="${currentModel}"]`)) {
-            select.value = currentModel;
+        if (currentTitleModel && titleSelect.querySelector(`option[value="${currentTitleModel}"]`)) {
+            titleSelect.value = currentTitleModel;
         } else if (this.models.length > 0) {
-            // Default to first available model
-            select.value = this.models[0].name;
+            titleSelect.value = this.models[0].name;
         }
+    }
 
-        // Load context length
-        const contextInput = document.getElementById('context-length-input');
-        const savedContext = localStorage.getItem('synapse_context_length');
-        contextInput.value = savedContext ? parseInt(savedContext) : 4096;
+    getAllModelSettings() {
+        const stored = localStorage.getItem('synapse_model_settings');
+        return stored ? JSON.parse(stored) : {};
+    }
+
+    saveModelSettings(modelName, settings) {
+        const allSettings = this.getAllModelSettings();
+        allSettings[modelName] = settings;
+        localStorage.setItem('synapse_model_settings', JSON.stringify(allSettings));
+    }
+
+    resetParams() {
+        if (!this.selectedModel) return;
+
+        Object.keys(PARAM_DEFS).forEach(param => {
+            const slider = document.getElementById(`${param}-slider`);
+            const valueDisplay = document.getElementById(`${param}-value`);
+            let value = DEFAULT_PARAMS[param];
+
+            // Clamp context to model max
+            if (param === 'num_ctx' && value > this.modelContextMax) {
+                value = this.modelContextMax;
+            }
+
+            slider.value = value;
+            if (param === 'num_ctx' || param === 'top_k') {
+                valueDisplay.textContent = Math.round(value);
+            } else {
+                valueDisplay.textContent = parseFloat(value).toFixed(param === 'top_p' ? 2 : 1);
+            }
+        });
     }
 
     save() {
-        // Save title model
-        const select = document.getElementById('title-model-select');
-        const selectedModel = select.value;
-
-        if (selectedModel) {
-            titleService.setTitleModel(selectedModel);
+        // Save model parameters for selected model
+        if (this.selectedModel) {
+            const settings = {};
+            Object.keys(PARAM_DEFS).forEach(param => {
+                const slider = document.getElementById(`${param}-slider`);
+                settings[param] = parseFloat(slider.value);
+            });
+            this.saveModelSettings(this.selectedModel, settings);
         }
 
-        // Save context length
-        const contextInput = document.getElementById('context-length-input');
-        const contextLength = parseInt(contextInput.value) || 4096;
-        localStorage.setItem('synapse_context_length', contextLength);
+        // Save title model
+        const titleSelect = document.getElementById('title-model-select');
+        const selectedTitleModel = titleSelect.value;
+        if (selectedTitleModel) {
+            titleService.setTitleModel(selectedTitleModel);
+        }
 
         this.close();
         eventBus.emit(Events.SETTINGS_UPDATED, {
-            titleModel: selectedModel,
-            contextLength: contextLength
+            titleModel: selectedTitleModel,
+            modelSettings: this.getAllModelSettings()
         });
     }
 }
@@ -176,4 +304,15 @@ export function openSettings() {
         settingsPanelInstance = new SettingsPanel();
     }
     settingsPanelInstance.open();
+}
+
+/**
+ * Get model parameters for a specific model
+ * @param {string} modelName - Model name
+ * @returns {Object} Parameters object with temperature, top_p, top_k, repeat_penalty, num_ctx
+ */
+export function getModelParams(modelName) {
+    const stored = localStorage.getItem('synapse_model_settings');
+    const allSettings = stored ? JSON.parse(stored) : {};
+    return allSettings[modelName] || { ...DEFAULT_PARAMS };
 }

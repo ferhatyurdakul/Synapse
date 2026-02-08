@@ -61,6 +61,46 @@ class OllamaService {
     }
 
     /**
+     * Get detailed info about a specific model
+     * @param {string} modelName - Name of the model
+     * @returns {Promise<{modelfile: string, parameters: string, details: object}>}
+     */
+    async getModelInfo(modelName) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/show`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: modelName })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch model info: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Extract context length from parameters string if available
+            let contextLength = 4096; // default
+            if (data.parameters) {
+                const match = data.parameters.match(/num_ctx\s+(\d+)/);
+                if (match) {
+                    contextLength = parseInt(match[1]);
+                }
+            }
+
+            return {
+                ...data,
+                contextLength
+            };
+        } catch (error) {
+            console.error('Error fetching model info:', error);
+            return { contextLength: 4096 }; // Return default on error
+        }
+    }
+
+    /**
      * Send a chat message and receive streaming response
      * @param {string} model - Model name to use
      * @param {Array<{role: string, content: string}>} messages - Chat history
