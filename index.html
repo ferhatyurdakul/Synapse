@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Synapse - Chat with local AI models using Ollama">
+    <title>Synapse - Local AI Chat</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css?v=2">
+
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Favicon -->
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⟩</text></svg>">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside id="sidebar-container">
+            <!-- ChatSidebar component renders here -->
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div id="model-selector-container">
+                    <!-- ModelSelector component renders here -->
+                </div>
+            </header>
+
+            <!-- Chat View -->
+            <section id="chat-view-container">
+                <!-- ChatView component renders here -->
+            </section>
+
+            <!-- Input Area -->
+            <footer id="input-area-container">
+                <!-- InputArea component renders here -->
+            </footer>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <span id="status-dot" class="status-dot"></span>
+                    <span id="status-text">Connecting to Ollama...</span>
+                </div>
+                <div class="status-info">
+                    <span>Synapse v1.0</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Global Utilities -->
+    <script>
+        // Copy code block content
+        window.copyCodeBlock = async function (btn) {
+            const container = btn.closest('.code-block-container');
+            const encodedCode = container.dataset.code;
+            const code = decodeURIComponent(atob(encodedCode));
+
+            try {
+                await navigator.clipboard.writeText(code);
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('success');
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy';
+                    btn.classList.remove('success');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        };
+
+        // Copy message content
+        window.copyMessageContent = async function (btn) {
+            const message = btn.closest('.message');
+            const content = message.querySelector('.message-content');
+            const text = content.innerText || content.textContent;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                btn.innerHTML = '✓';
+                btn.classList.add('success');
+                setTimeout(() => {
+                    btn.innerHTML = '📋';
+                    btn.classList.remove('success');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        };
+
+        // Resend last user message
+        window.resendMessage = function (btn) {
+            const message = btn.closest('.message');
+            const content = message.querySelector('.message-content');
+            const text = content.innerText || content.textContent;
+
+            // Dispatch custom event for the app to handle
+            window.dispatchEvent(new CustomEvent('resend-message', { detail: { content: text } }));
+        };
+    </script>
+
+    <!-- App Script -->
+    <script type="module" src="js/app.js?v=17"></script>
+</body>
+
+</html>
