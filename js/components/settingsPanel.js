@@ -2,9 +2,9 @@
  * SettingsPanel - Modal component for application settings
  */
 
-import { titleService } from '../services/titleService.js?v=18';
-import { ollamaService } from '../services/ollamaService.js?v=18';
-import { eventBus, Events } from '../utils/eventBus.js?v=18';
+import { titleService } from '../services/titleService.js?v=19';
+import { ollamaService } from '../services/ollamaService.js?v=19';
+import { eventBus, Events } from '../utils/eventBus.js?v=19';
 
 class SettingsPanel {
     constructor() {
@@ -27,6 +27,19 @@ class SettingsPanel {
                     <button id="settings-close-btn" class="settings-close-btn">×</button>
                 </div>
                 <div class="settings-content">
+                    <div class="settings-section">
+                        <h3>Model Settings</h3>
+                        <p class="settings-description">Configure how the AI model processes your messages.</p>
+                        <div class="settings-field">
+                            <label for="context-length-input">Context Length</label>
+                            <div class="settings-input-group">
+                                <input type="number" id="context-length-input" class="settings-input" 
+                                    min="512" max="131072" step="512" value="4096">
+                                <span class="settings-hint">tokens (512 - 131072)</span>
+                            </div>
+                            <p class="settings-field-description">Higher values allow longer conversations but use more memory.</p>
+                        </div>
+                    </div>
                     <div class="settings-section">
                         <h3>Title Generation</h3>
                         <p class="settings-description">Choose which model generates chat titles automatically.</p>
@@ -108,6 +121,7 @@ class SettingsPanel {
     }
 
     loadCurrentSettings() {
+        // Load title model
         const select = document.getElementById('title-model-select');
         const currentModel = titleService.getTitleModel();
 
@@ -118,9 +132,15 @@ class SettingsPanel {
             // Default to first available model
             select.value = this.models[0].name;
         }
+
+        // Load context length
+        const contextInput = document.getElementById('context-length-input');
+        const savedContext = localStorage.getItem('synapse_context_length');
+        contextInput.value = savedContext ? parseInt(savedContext) : 4096;
     }
 
     save() {
+        // Save title model
         const select = document.getElementById('title-model-select');
         const selectedModel = select.value;
 
@@ -128,8 +148,16 @@ class SettingsPanel {
             titleService.setTitleModel(selectedModel);
         }
 
+        // Save context length
+        const contextInput = document.getElementById('context-length-input');
+        const contextLength = parseInt(contextInput.value) || 4096;
+        localStorage.setItem('synapse_context_length', contextLength);
+
         this.close();
-        eventBus.emit(Events.SETTINGS_UPDATED, { titleModel: selectedModel });
+        eventBus.emit(Events.SETTINGS_UPDATED, {
+            titleModel: selectedModel,
+            contextLength: contextLength
+        });
     }
 }
 
