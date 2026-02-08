@@ -24,6 +24,9 @@
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
     <!-- Favicon -->
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⟩</text></svg>">
@@ -78,11 +81,13 @@
 
             try {
                 await navigator.clipboard.writeText(code);
-                btn.textContent = '✓ Copied!';
+                btn.innerHTML = '<i data-lucide="check" class="icon"></i> Copied!';
                 btn.classList.add('success');
+                lucide.createIcons();
                 setTimeout(() => {
-                    btn.textContent = '📋 Copy';
+                    btn.innerHTML = '<i data-lucide="copy" class="icon"></i> Copy';
                     btn.classList.remove('success');
+                    lucide.createIcons();
                 }, 2000);
             } catch (err) {
                 console.error('Failed to copy:', err);
@@ -97,11 +102,13 @@
 
             try {
                 await navigator.clipboard.writeText(text);
-                btn.innerHTML = '✓';
+                btn.innerHTML = '<i data-lucide="check" class="icon"></i>';
                 btn.classList.add('success');
+                lucide.createIcons();
                 setTimeout(() => {
-                    btn.innerHTML = '📋';
+                    btn.innerHTML = '<i data-lucide="copy" class="icon"></i>';
                     btn.classList.remove('success');
+                    lucide.createIcons();
                 }, 2000);
             } catch (err) {
                 console.error('Failed to copy:', err);
@@ -120,7 +127,7 @@
     </script>
 
     <!-- App Script -->
-    <script type="module" src="js/app.js?v=17"></script>
+    <script type="module" src="js/app.js?v=18"></script>
 </body>
 
 </html>

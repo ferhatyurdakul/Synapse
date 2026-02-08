@@ -2,9 +2,9 @@
  * SettingsPanel - Modal component for application settings
  */
 
-import { titleService } from '../services/titleService.js?v=17';
-import { ollamaService } from '../services/ollamaService.js?v=17';
-import { eventBus, Events } from '../utils/eventBus.js?v=17';
+import { titleService } from '../services/titleService.js?v=18';
+import { ollamaService } from '../services/ollamaService.js?v=18';
+import { eventBus, Events } from '../utils/eventBus.js?v=18';
 
 class SettingsPanel {
     constructor() {

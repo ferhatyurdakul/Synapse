@@ -640,6 +640,15 @@ body::before {
     font-size: var(--font-xs);
     border-radius: 2px;
     transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.code-copy-btn .icon,
+.message-action-btn .icon {
+    width: 14px;
+    height: 14px;
 }
 
 .code-copy-btn:hover {

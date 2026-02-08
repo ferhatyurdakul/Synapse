@@ -2,12 +2,12 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=17';
-import { ollamaService } from '../services/ollamaService.js?v=17';
-import { titleService } from '../services/titleService.js?v=17';
-import { eventBus, Events } from '../utils/eventBus.js?v=17';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=17';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=17';
+import { chatService } from '../services/chatService.js?v=18';
+import { ollamaService } from '../services/ollamaService.js?v=18';
+import { titleService } from '../services/titleService.js?v=18';
+import { eventBus, Events } from '../utils/eventBus.js?v=18';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=18';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=18';
 
 class ChatView {
     constructor(containerId) {
@@ -107,6 +107,11 @@ class ChatView {
             const isLastUserMsg = msg.role === 'user' && index === chat.messages.length - 1;
             this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, isLastUserMsg);
         });
+
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
 
         this.scrollToBottom();
     }
@@ -231,7 +236,7 @@ class ChatView {
             : `⟨ ${model || this.selectedModel || 'AI'}`;
 
         // Build action buttons
-        let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message">📋</button>`;
+        let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message"><i data-lucide="copy" class="icon"></i></button>`;
 
         // Add resend button only for user messages (will be shown only on last one)
         if (role === 'user') {
@@ -261,6 +266,11 @@ class ChatView {
         // Render LaTeX in the message
         const contentEl = messageEl.querySelector('.message-content');
         renderLatexInElement(contentEl);
+
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
     }
 
     createStreamingMessage() {
@@ -286,7 +296,7 @@ class ChatView {
             <div class="message-header">
                 <span class="message-role">⟨ ${modelDisplay}</span>
                 <div class="message-actions">
-                    <button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message">📋</button>
+                    <button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message"><i data-lucide="copy" class="icon"></i></button>
                 </div>
                 <span class="message-time">${timestamp}</span>
             </div>

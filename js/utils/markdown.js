@@ -61,7 +61,7 @@ function getMarkedInstance() {
         return `<div class="code-block-container" data-code="${encodedCode}">
             <div class="code-block-header">
                 <span class="code-block-lang">${lang}</span>
-                <button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy code">📋 Copy</button>
+                <button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy code"><i data-lucide="copy" class="icon"></i> Copy</button>
             </div>
             <pre><code class="language-${lang}">${escapedCode}</code></pre>
         </div>`;
