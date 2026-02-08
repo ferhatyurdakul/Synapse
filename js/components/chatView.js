@@ -2,13 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=20';
-import { ollamaService } from '../services/ollamaService.js?v=20';
-import { titleService } from '../services/titleService.js?v=20';
-import { eventBus, Events } from '../utils/eventBus.js?v=20';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=20';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=20';
-import { getModelParams } from './settingsPanel.js?v=20';
+import { chatService } from '../services/chatService.js?v=21';
+import { ollamaService } from '../services/ollamaService.js?v=21';
+import { titleService } from '../services/titleService.js?v=21';
+import { eventBus, Events } from '../utils/eventBus.js?v=21';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=21';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=21';
+import { getModelParams } from './settingsPanel.js?v=21';
 
 class ChatView {
     constructor(containerId) {

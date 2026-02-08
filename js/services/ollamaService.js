@@ -63,7 +63,7 @@ class OllamaService {
     /**
      * Get detailed info about a specific model
      * @param {string} modelName - Name of the model
-     * @returns {Promise<{modelfile: string, parameters: string, details: object}>}
+     * @returns {Promise<{modelfile: string, parameters: string, details: object, contextLength: number}>}
      */
     async getModelInfo(modelName) {
         try {
@@ -81,8 +81,21 @@ class OllamaService {
 
             const data = await response.json();
 
-            // Extract context length from parameters string if available
-            let contextLength = 4096; // default
+            // Extract context length from model_info (preferred) or parameters string
+            let contextLength = 131072; // fallback to max if not found
+
+            // Check model_info first - context_length is stored with architecture prefix
+            // e.g., "gemma3.context_length", "qwen3.context_length", "llama.context_length"
+            if (data.model_info) {
+                for (const key of Object.keys(data.model_info)) {
+                    if (key.endsWith('.context_length')) {
+                        contextLength = data.model_info[key];
+                        break;
+                    }
+                }
+            }
+
+            // Fallback: check parameters string for num_ctx override
             if (data.parameters) {
                 const match = data.parameters.match(/num_ctx\s+(\d+)/);
                 if (match) {
@@ -96,7 +109,7 @@ class OllamaService {
             };
         } catch (error) {
             console.error('Error fetching model info:', error);
-            return { contextLength: 4096 }; // Return default on error
+            return { contextLength: 131072 }; // Return max on error
         }
     }
 
