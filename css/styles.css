@@ -1322,6 +1322,12 @@ body::before {
     display: none;
 }
 
+.summarizing-hint {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 13px;
+}
+
 .context-meter-bar {
     flex: 1;
     height: 4px;

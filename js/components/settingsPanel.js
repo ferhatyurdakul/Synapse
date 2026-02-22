@@ -3,9 +3,9 @@
  * Supports per-model parameter configuration
  */
 
-import { titleService } from '../services/titleService.js?v=23';
-import { ollamaService } from '../services/ollamaService.js?v=23';
-import { eventBus, Events } from '../utils/eventBus.js?v=23';
+import { titleService } from '../services/titleService.js?v=24';
+import { ollamaService } from '../services/ollamaService.js?v=24';
+import { eventBus, Events } from '../utils/eventBus.js?v=24';
 
 // Default model parameters
 const DEFAULT_PARAMS = {

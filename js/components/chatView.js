@@ -2,13 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=23';
-import { ollamaService } from '../services/ollamaService.js?v=23';
-import { titleService } from '../services/titleService.js?v=23';
-import { eventBus, Events } from '../utils/eventBus.js?v=23';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=23';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=23';
-import { getModelParams } from './settingsPanel.js?v=23';
+import { chatService } from '../services/chatService.js?v=24';
+import { ollamaService } from '../services/ollamaService.js?v=24';
+import { titleService } from '../services/titleService.js?v=24';
+import { eventBus, Events } from '../utils/eventBus.js?v=24';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=24';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=24';
+import { getModelParams } from './settingsPanel.js?v=24';
 
 class ChatView {
     constructor(containerId) {
@@ -151,14 +151,18 @@ class ChatView {
         let fullThinking = '';
 
         try {
-            const messages = chatService.getMessagesForApi();
-
             // Get model parameters from settings (per-model)
             const modelParams = getModelParams(chat.model);
+            const maxCtx = modelParams.num_ctx || 4096;
+
+            // Get messages with smart context management (may summarize)
+            contentEl.innerHTML = '<span class="summarizing-hint">Preparing context...</span>';
+            const prepared = await chatService.getMessagesForApi(maxCtx);
+            contentEl.innerHTML = '';
 
             const result = await ollamaService.chat(
                 chat.model,
-                messages,
+                prepared.messages,
                 (chunk) => {
                     fullContent = chunk.fullContent;
                     fullThinking = chunk.fullThinking;
@@ -192,8 +196,9 @@ class ChatView {
             const totalUsed = result.promptEvalCount + result.evalCount;
             eventBus.emit(Events.CONTEXT_UPDATED, {
                 used: totalUsed,
-                max: modelParams.num_ctx || 4096,
-                model: chat.model
+                max: maxCtx,
+                model: chat.model,
+                summarized: prepared.summarized
             });
 
             // Save final message

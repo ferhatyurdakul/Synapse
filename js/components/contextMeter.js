@@ -3,7 +3,7 @@
  * Shows used/max tokens with color-coded progress
  */
 
-import { eventBus, Events } from '../utils/eventBus.js?v=23';
+import { eventBus, Events } from '../utils/eventBus.js?v=24';
 
 class ContextMeter {
     constructor() {
@@ -33,7 +33,7 @@ class ContextMeter {
 
     attachEvents() {
         eventBus.on(Events.CONTEXT_UPDATED, (data) => {
-            this.update(data.used, data.max);
+            this.update(data.used, data.max, data.summarized);
         });
 
         // Show dash on chat switch / new chat (no data yet)
@@ -55,7 +55,7 @@ class ContextMeter {
         if (text) text.textContent = '—';
     }
 
-    update(used, max) {
+    update(used, max, summarized = false) {
         this.used = used;
         this.max = max;
 
@@ -83,7 +83,8 @@ class ContextMeter {
 
         const usedStr = used.toLocaleString();
         const maxStr = max.toLocaleString();
-        text.textContent = `${usedStr} / ${maxStr} tokens`;
+        const suffix = summarized ? ' · 📝 summarized' : '';
+        text.textContent = `${usedStr} / ${maxStr} tokens${suffix}`;
     }
 }
 

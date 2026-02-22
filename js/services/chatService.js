@@ -3,8 +3,9 @@
  * Coordinates between UI, Ollama service, and storage
  */
 
-import { storageService } from './storageService.js?v=23';
-import { eventBus, Events } from '../utils/eventBus.js?v=23';
+import { storageService } from './storageService.js?v=24';
+import { contextService } from './contextService.js?v=24';
+import { eventBus, Events } from '../utils/eventBus.js?v=24';
 
 /**
  * Generate unique ID for chats
@@ -61,6 +62,8 @@ class ChatService {
             title: 'New Chat',
             model,
             messages: [],
+            summary: null,
+            summarizedUpTo: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -158,17 +161,27 @@ class ChatService {
     }
 
     /**
-     * Get messages formatted for Ollama API
-     * @returns {Array<{role: string, content: string}>}
+     * Get messages formatted for Ollama API, with smart context management
+     * @param {number} maxCtx - Maximum context window size
+     * @returns {Promise<{messages: Array<{role: string, content: string}>, summarized: boolean}>}
      */
-    getMessagesForApi() {
+    async getMessagesForApi(maxCtx = 4096) {
         const chat = this.getCurrentChat();
-        if (!chat) return [];
+        if (!chat) return { messages: [], summarized: false };
 
-        return chat.messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        const result = await contextService.prepareMessages(chat, maxCtx);
+
+        // Store summary if generated
+        if (result.summary && result.summarizedUpTo > (chat.summarizedUpTo || 0)) {
+            chat.summary = result.summary;
+            chat.summarizedUpTo = result.summarizedUpTo;
+            this.save();
+        }
+
+        return {
+            messages: result.messages,
+            summarized: result.summarized
+        };
     }
 
     /**
