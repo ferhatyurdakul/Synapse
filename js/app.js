@@ -3,14 +3,14 @@
  * Initializes and coordinates all components
  */
 
-import { createModelSelector } from './components/modelSelector.js?v=22';
-import { createChatSidebar } from './components/chatSidebar.js?v=22';
-import { createChatView } from './components/chatView.js?v=22';
-import { createInputArea } from './components/inputArea.js?v=22';
-import { createSettingsPanel } from './components/settingsPanel.js?v=22';
-import { createContextMeter } from './components/contextMeter.js?v=22';
-import { ollamaService } from './services/ollamaService.js?v=22';
-import { eventBus, Events } from './utils/eventBus.js?v=22';
+import { createModelSelector } from './components/modelSelector.js?v=23';
+import { createChatSidebar } from './components/chatSidebar.js?v=23';
+import { createChatView } from './components/chatView.js?v=23';
+import { createInputArea } from './components/inputArea.js?v=23';
+import { createSettingsPanel } from './components/settingsPanel.js?v=23';
+import { createContextMeter } from './components/contextMeter.js?v=23';
+import { ollamaService } from './services/ollamaService.js?v=23';
+import { eventBus, Events } from './utils/eventBus.js?v=23';
 
 class App {
     constructor() {
