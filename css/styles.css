@@ -1308,3 +1308,106 @@ body::before {
     background: var(--accent-blue);
     transform: scale(1.1);
 }
+
+/* Context Meter */
+.context-meter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.context-meter.hidden,
+.context-meter.no-data {
+    display: none;
+}
+
+.context-meter-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.context-meter-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease, background 0.5s ease;
+    width: 0%;
+}
+
+.context-meter-fill.level-ok {
+    background: var(--accent-cyan);
+}
+
+.context-meter-fill.level-warn {
+    background: var(--accent-yellow, #e2b714);
+}
+
+.context-meter-fill.level-danger {
+    background: var(--accent-red, #e74c3c);
+}
+
+.context-meter-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Toggle Switch */
+.settings-toggle-field {
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.settings-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.settings-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-tertiary);
+    border-radius: 22px;
+    border: 1px solid var(--border-color);
+    transition: all var(--transition-fast);
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    bottom: 2px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: all var(--transition-fast);
+}
+
+.settings-toggle input:checked+.toggle-slider {
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+.settings-toggle input:checked+.toggle-slider::before {
+    transform: translateX(18px);
+    background: var(--bg-primary);
+}

@@ -169,6 +169,8 @@ class OllamaService {
             let fullThinking = '';
             let buffer = '';
             let inThinkingBlock = false;
+            let promptEvalCount = 0;
+            let evalCount = 0;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -239,6 +241,8 @@ class OllamaService {
                         }
 
                         if (json.done) {
+                            promptEvalCount = json.prompt_eval_count || 0;
+                            evalCount = json.eval_count || 0;
                             break;
                         }
                     } catch (parseError) {
@@ -251,7 +255,9 @@ class OllamaService {
 
             return {
                 content: fullContent,
-                thinking: fullThinking
+                thinking: fullThinking,
+                promptEvalCount,
+                evalCount
             };
         } catch (error) {
             if (error.name === 'AbortError') {

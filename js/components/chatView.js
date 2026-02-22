@@ -2,13 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=21';
-import { ollamaService } from '../services/ollamaService.js?v=21';
-import { titleService } from '../services/titleService.js?v=21';
-import { eventBus, Events } from '../utils/eventBus.js?v=21';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=21';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=21';
-import { getModelParams } from './settingsPanel.js?v=21';
+import { chatService } from '../services/chatService.js?v=22';
+import { ollamaService } from '../services/ollamaService.js?v=22';
+import { titleService } from '../services/titleService.js?v=22';
+import { eventBus, Events } from '../utils/eventBus.js?v=22';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=22';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=22';
+import { getModelParams } from './settingsPanel.js?v=22';
 
 class ChatView {
     constructor(containerId) {
@@ -156,7 +156,7 @@ class ChatView {
             // Get model parameters from settings (per-model)
             const modelParams = getModelParams(chat.model);
 
-            await ollamaService.chat(
+            const result = await ollamaService.chat(
                 chat.model,
                 messages,
                 (chunk) => {
@@ -187,6 +187,14 @@ class ChatView {
                 },
                 { options: modelParams }
             );
+
+            // Emit context usage data
+            const totalUsed = result.promptEvalCount + result.evalCount;
+            eventBus.emit(Events.CONTEXT_UPDATED, {
+                used: totalUsed,
+                max: modelParams.num_ctx || 4096,
+                model: chat.model
+            });
 
             // Save final message
             chatService.addMessage('assistant', fullContent, fullThinking);

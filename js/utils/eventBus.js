@@ -96,5 +96,8 @@ export const Events = {
     CHATS_EXPORTED: 'chats:exported',
 
     // Settings events
-    SETTINGS_UPDATED: 'settings:updated'
+    SETTINGS_UPDATED: 'settings:updated',
+
+    // Context events
+    CONTEXT_UPDATED: 'context:updated'
 };

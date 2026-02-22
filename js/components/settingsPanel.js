@@ -3,9 +3,9 @@
  * Supports per-model parameter configuration
  */
 
-import { titleService } from '../services/titleService.js?v=21';
-import { ollamaService } from '../services/ollamaService.js?v=21';
-import { eventBus, Events } from '../utils/eventBus.js?v=21';
+import { titleService } from '../services/titleService.js?v=22';
+import { ollamaService } from '../services/ollamaService.js?v=22';
+import { eventBus, Events } from '../utils/eventBus.js?v=22';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -77,6 +77,13 @@ class SettingsPanel {
                             <select id="title-model-select" class="settings-select">
                                 <option value="">Loading models...</option>
                             </select>
+                        </div>
+                        <div class="settings-field settings-toggle-field">
+                            <label for="context-meter-toggle">Show Context Meter</label>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="context-meter-toggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -228,6 +235,11 @@ class SettingsPanel {
         } else if (this.models.length > 0) {
             titleSelect.value = this.models[0].name;
         }
+
+        // Load context meter toggle
+        const contextToggle = document.getElementById('context-meter-toggle');
+        const stored = localStorage.getItem('synapse_show_context_meter');
+        contextToggle.checked = stored === null ? true : stored === 'true';
     }
 
     getAllModelSettings() {
@@ -281,10 +293,16 @@ class SettingsPanel {
             titleService.setTitleModel(selectedTitleModel);
         }
 
+        // Save context meter visibility
+        const contextToggle = document.getElementById('context-meter-toggle');
+        const showContextMeter = contextToggle.checked;
+        localStorage.setItem('synapse_show_context_meter', showContextMeter);
+
         this.close();
         eventBus.emit(Events.SETTINGS_UPDATED, {
             titleModel: selectedTitleModel,
-            modelSettings: this.getAllModelSettings()
+            modelSettings: this.getAllModelSettings(),
+            showContextMeter
         });
     }
 }

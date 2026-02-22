@@ -2,8 +2,8 @@
  * TitleService - Generates chat titles using AI models
  */
 
-import { ollamaService } from './ollamaService.js?v=21';
-import { storageService } from './storageService.js?v=21';
+import { ollamaService } from './ollamaService.js?v=22';
+import { storageService } from './storageService.js?v=22';
 
 const TITLE_PROMPT = `### Task:
 Generate a concise, 3-5 word title with an emoji summarizing the chat history.

@@ -3,8 +3,8 @@
  * Coordinates between UI, Ollama service, and storage
  */
 
-import { storageService } from './storageService.js?v=21';
-import { eventBus, Events } from '../utils/eventBus.js?v=21';
+import { storageService } from './storageService.js?v=22';
+import { eventBus, Events } from '../utils/eventBus.js?v=22';
 
 /**
  * Generate unique ID for chats
