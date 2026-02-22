@@ -3,9 +3,9 @@
  * Handles chat list, new chat, import/export
  */
 
-import { chatService } from '../services/chatService.js?v=24';
-import { eventBus, Events } from '../utils/eventBus.js?v=24';
-import { openSettings } from './settingsPanel.js?v=24';
+import { chatService } from '../services/chatService.js?v=25';
+import { eventBus, Events } from '../utils/eventBus.js?v=25';
+import { openSettings } from './settingsPanel.js?v=25';
 
 class ChatSidebar {
     constructor(containerId) {

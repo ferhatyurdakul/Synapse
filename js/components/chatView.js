@@ -2,13 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=24';
-import { ollamaService } from '../services/ollamaService.js?v=24';
-import { titleService } from '../services/titleService.js?v=24';
-import { eventBus, Events } from '../utils/eventBus.js?v=24';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=24';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=24';
-import { getModelParams } from './settingsPanel.js?v=24';
+import { chatService } from '../services/chatService.js?v=25';
+import { ollamaService } from '../services/ollamaService.js?v=25';
+import { titleService } from '../services/titleService.js?v=25';
+import { eventBus, Events } from '../utils/eventBus.js?v=25';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=25';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=25';
+import { getModelParams } from './settingsPanel.js?v=25';
 
 class ChatView {
     constructor(containerId) {
@@ -200,6 +200,9 @@ class ChatView {
                 model: chat.model,
                 summarized: prepared.summarized
             });
+
+            // Store actual token count for next summarization decision
+            chatService.updateTokenCount(totalUsed);
 
             // Save final message
             chatService.addMessage('assistant', fullContent, fullThinking);

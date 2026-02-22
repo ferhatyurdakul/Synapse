@@ -1,12 +1,9 @@
 /**
  * ContextService - Manages context window optimization
- * Automatically summarizes older messages when context usage is high
+ * Uses actual token counts from Ollama to decide when to summarize
  */
 
-import { ollamaService } from './ollamaService.js?v=24';
-
-// Rough estimate: ~4 characters per token (covers most models)
-const CHARS_PER_TOKEN = 4;
+import { ollamaService } from './ollamaService.js?v=25';
 
 // Summarize when usage exceeds this fraction of max context
 const SUMMARIZE_THRESHOLD = 0.7;
@@ -24,45 +21,21 @@ Be thorough but brief. Write in a neutral tone as a factual summary.`;
 
 class ContextService {
     /**
-     * Estimate token count from text
-     * @param {string} text
-     * @returns {number}
-     */
-    estimateTokens(text) {
-        if (!text) return 0;
-        return Math.ceil(text.length / CHARS_PER_TOKEN);
-    }
-
-    /**
-     * Estimate total tokens for an array of messages
-     * @param {Array<{role: string, content: string}>} messages
-     * @returns {number}
-     */
-    estimateMessagesTokens(messages) {
-        let total = 0;
-        for (const msg of messages) {
-            // Add overhead per message (role, formatting ~4 tokens)
-            total += 4;
-            total += this.estimateTokens(msg.content);
-        }
-        return total;
-    }
-
-    /**
-     * Check if messages need summarization
-     * @param {Array} messages
+     * Check if summarization is needed based on actual token usage
+     * @param {Object} chat - Chat object with lastTokenCount
      * @param {number} maxCtx - Maximum context length
      * @returns {boolean}
      */
-    shouldSummarize(messages, maxCtx) {
-        if (messages.length <= KEEP_RECENT_COUNT) return false;
-        const estimated = this.estimateMessagesTokens(messages);
-        return estimated > maxCtx * SUMMARIZE_THRESHOLD;
+    shouldSummarize(chat, maxCtx) {
+        if (chat.messages.length <= KEEP_RECENT_COUNT) return false;
+        const lastUsed = chat.lastTokenCount || 0;
+        if (lastUsed === 0) return false;
+        return lastUsed > maxCtx * SUMMARIZE_THRESHOLD;
     }
 
     /**
      * Prepare messages for API, applying summarization if needed
-     * @param {Object} chat - Full chat object with messages, summary, summarizedUpTo
+     * @param {Object} chat - Full chat object
      * @param {number} maxCtx - Maximum context length
      * @returns {Promise<{messages: Array, summarized: boolean, summary: string|null, summarizedUpTo: number}>}
      */
@@ -73,7 +46,7 @@ class ContextService {
         }));
 
         // Not enough messages or under threshold — send as-is
-        if (!this.shouldSummarize(messages, maxCtx)) {
+        if (!this.shouldSummarize(chat, maxCtx)) {
             return {
                 messages,
                 summarized: false,
@@ -87,7 +60,6 @@ class ContextService {
 
         // Check if we already have a valid summary covering these messages
         if (chat.summary && chat.summarizedUpTo >= splitIndex) {
-            // Reuse existing summary
             const recentMessages = messages.slice(chat.summarizedUpTo);
             const summaryMessage = {
                 role: 'system',
@@ -120,7 +92,6 @@ class ContextService {
             };
         } catch (error) {
             console.error('Summarization failed, sending all messages:', error);
-            // Fallback: send all messages and let Ollama's sliding window handle it
             return {
                 messages,
                 summarized: false,
@@ -137,7 +108,6 @@ class ContextService {
      * @returns {Promise<string>} Summary text
      */
     async summarizeMessages(messages, model) {
-        // Format messages into readable text
         const conversationText = messages.map(msg => {
             const prefix = msg.role === 'user' ? 'User' : 'Assistant';
             return `${prefix}: ${msg.content}`;
@@ -149,7 +119,7 @@ class ContextService {
                 { role: 'system', content: SUMMARIZE_PROMPT },
                 { role: 'user', content: conversationText }
             ],
-            () => { }, // No streaming needed for summary
+            () => { },
             { options: { temperature: 0.3, num_ctx: 4096 } }
         );
 

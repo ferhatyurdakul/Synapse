@@ -3,9 +3,9 @@
  * Coordinates between UI, Ollama service, and storage
  */
 
-import { storageService } from './storageService.js?v=24';
-import { contextService } from './contextService.js?v=24';
-import { eventBus, Events } from '../utils/eventBus.js?v=24';
+import { storageService } from './storageService.js?v=25';
+import { contextService } from './contextService.js?v=25';
+import { eventBus, Events } from '../utils/eventBus.js?v=25';
 
 /**
  * Generate unique ID for chats
@@ -64,6 +64,7 @@ class ChatService {
             messages: [],
             summary: null,
             summarizedUpTo: 0,
+            lastTokenCount: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -286,6 +287,16 @@ class ChatService {
     updateModel(model) {
         if (this.currentChatId && this.chats[this.currentChatId]) {
             this.chats[this.currentChatId].model = model;
+            this.save();
+        }
+    }
+    /**
+     * Update last token count for current chat
+     * @param {number} tokenCount - Actual token count from Ollama
+     */
+    updateTokenCount(tokenCount) {
+        if (this.currentChatId && this.chats[this.currentChatId]) {
+            this.chats[this.currentChatId].lastTokenCount = tokenCount;
             this.save();
         }
     }
