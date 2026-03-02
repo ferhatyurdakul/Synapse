@@ -256,6 +256,12 @@ class ChatView {
             parts.push(`${ttft.toFixed(2)}s to first token`);
         }
 
+        // Total time (total_duration in nanoseconds)
+        if (result.totalDuration > 0) {
+            const total = result.totalDuration / 1e9;
+            parts.push(`${total.toFixed(2)}s total`);
+        }
+
         // Stop reason
         if (result.doneReason) {
             const reasonMap = {
