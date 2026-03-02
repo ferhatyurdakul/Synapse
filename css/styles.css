@@ -1328,6 +1328,24 @@ body::before {
     font-size: 13px;
 }
 
+/* Message Stats */
+.message-stats {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    opacity: 0.7;
+    transition: opacity var(--transition-fast);
+}
+
+.message-stats:hover {
+    opacity: 1;
+}
+
 .context-meter-bar {
     flex: 1;
     height: 4px;

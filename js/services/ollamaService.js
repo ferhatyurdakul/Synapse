@@ -171,6 +171,10 @@ class OllamaService {
             let inThinkingBlock = false;
             let promptEvalCount = 0;
             let evalCount = 0;
+            let evalDuration = 0;
+            let promptEvalDuration = 0;
+            let totalDuration = 0;
+            let doneReason = '';
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -243,6 +247,10 @@ class OllamaService {
                         if (json.done) {
                             promptEvalCount = json.prompt_eval_count || 0;
                             evalCount = json.eval_count || 0;
+                            evalDuration = json.eval_duration || 0;
+                            promptEvalDuration = json.prompt_eval_duration || 0;
+                            totalDuration = json.total_duration || 0;
+                            doneReason = json.done_reason || 'stop';
                             break;
                         }
                     } catch (parseError) {
@@ -257,7 +265,11 @@ class OllamaService {
                 content: fullContent,
                 thinking: fullThinking,
                 promptEvalCount,
-                evalCount
+                evalCount,
+                evalDuration,
+                promptEvalDuration,
+                totalDuration,
+                doneReason
             };
         } catch (error) {
             if (error.name === 'AbortError') {

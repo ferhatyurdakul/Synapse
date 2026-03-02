@@ -2,13 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=25';
-import { ollamaService } from '../services/ollamaService.js?v=25';
-import { titleService } from '../services/titleService.js?v=25';
-import { eventBus, Events } from '../utils/eventBus.js?v=25';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=25';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=25';
-import { getModelParams } from './settingsPanel.js?v=25';
+import { chatService } from '../services/chatService.js?v=26';
+import { ollamaService } from '../services/ollamaService.js?v=26';
+import { titleService } from '../services/titleService.js?v=26';
+import { eventBus, Events } from '../utils/eventBus.js?v=26';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=26';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=26';
+import { getModelParams } from './settingsPanel.js?v=26';
 
 class ChatView {
     constructor(containerId) {
@@ -204,6 +204,12 @@ class ChatView {
             // Store actual token count for next summarization decision
             chatService.updateTokenCount(totalUsed);
 
+            // Add message stats bar
+            const stats = this.buildMessageStats(result);
+            if (stats) {
+                messageEl.appendChild(stats);
+            }
+
             // Save final message
             chatService.addMessage('assistant', fullContent, fullThinking);
 
@@ -226,6 +232,42 @@ class ChatView {
         this.currentStreamEl = null;
         this.currentThinkingBlock = null;
         eventBus.emit(Events.STREAM_END, { aborted: false });
+    }
+    buildMessageStats(result) {
+        if (!result || !result.evalCount) return null;
+
+        const statsEl = document.createElement('div');
+        statsEl.className = 'message-stats';
+
+        const parts = [];
+
+        // tok/s (eval_duration is in nanoseconds)
+        if (result.evalDuration > 0) {
+            const tokPerSec = result.evalCount / (result.evalDuration / 1e9);
+            parts.push(`${tokPerSec.toFixed(2)} tok/s`);
+        }
+
+        // Total generated tokens
+        parts.push(`${result.evalCount} tokens`);
+
+        // Time to first token (prompt_eval_duration in nanoseconds)
+        if (result.promptEvalDuration > 0) {
+            const ttft = result.promptEvalDuration / 1e9;
+            parts.push(`${ttft.toFixed(2)}s to first token`);
+        }
+
+        // Stop reason
+        if (result.doneReason) {
+            const reasonMap = {
+                'stop': 'Stop',
+                'length': 'Max Length',
+                'load': 'Model Load'
+            };
+            parts.push(`Stop reason: ${reasonMap[result.doneReason] || result.doneReason}`);
+        }
+
+        statsEl.textContent = parts.join(' • ');
+        return statsEl;
     }
 
     appendMessage(role, content, thinking = '', animate = true, model = null, isLastUserMessage = false) {

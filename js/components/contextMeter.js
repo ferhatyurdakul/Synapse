@@ -3,7 +3,7 @@
  * Shows used/max tokens with color-coded progress
  */
 
-import { eventBus, Events } from '../utils/eventBus.js?v=25';
+import { eventBus, Events } from '../utils/eventBus.js?v=26';
 
 class ContextMeter {
     constructor() {

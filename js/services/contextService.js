@@ -3,7 +3,7 @@
  * Uses actual token counts from Ollama to decide when to summarize
  */
 
-import { ollamaService } from './ollamaService.js?v=25';
+import { ollamaService } from './ollamaService.js?v=26';
 
 // Summarize when usage exceeds this fraction of max context
 const SUMMARIZE_THRESHOLD = 0.7;
