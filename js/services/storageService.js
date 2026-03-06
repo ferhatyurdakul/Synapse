@@ -71,9 +71,11 @@ class StorageService {
      */
     getDefaultSettings() {
         return {
+            selectedProvider: 'ollama',
             selectedModel: null,
             thinkingCollapsed: true,
             sidebarOpen: true,
+            titleProvider: 'ollama',
             titleModel: 'gemma3:1b'
         };
     }

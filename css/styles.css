@@ -361,6 +361,15 @@ body::before {
     gap: 2px;
 }
 
+.model-selector .model-label {
+    margin-left: 8px;
+}
+
+.provider-select {
+    min-width: 90px;
+    max-width: 110px;
+}
+
 .label-icon {
     color: var(--accent-green);
 }

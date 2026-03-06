@@ -2,13 +2,13 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=26';
-import { ollamaService } from '../services/ollamaService.js?v=26';
-import { titleService } from '../services/titleService.js?v=26';
-import { eventBus, Events } from '../utils/eventBus.js?v=26';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=26';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=26';
-import { getModelParams } from './settingsPanel.js?v=26';
+import { chatService } from '../services/chatService.js?v=27';
+import { providerManager } from '../services/providerManager.js?v=27';
+import { titleService } from '../services/titleService.js?v=27';
+import { eventBus, Events } from '../utils/eventBus.js?v=27';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=27';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=27';
+import { getModelParams } from './settingsPanel.js?v=27';
 
 class ChatView {
     constructor(containerId) {
@@ -63,7 +63,7 @@ class ChatView {
 
         eventBus.on(Events.STREAM_END, ({ aborted }) => {
             if (aborted) {
-                ollamaService.abort();
+                providerManager.getProvider().abort();
             }
         });
 
@@ -160,7 +160,7 @@ class ChatView {
             const prepared = await chatService.getMessagesForApi(maxCtx);
             contentEl.innerHTML = '';
 
-            const result = await ollamaService.chat(
+            const result = await providerManager.getProvider().chat(
                 chat.model,
                 prepared.messages,
                 (chunk) => {

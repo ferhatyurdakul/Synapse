@@ -3,14 +3,14 @@
  * Initializes and coordinates all components
  */
 
-import { createModelSelector } from './components/modelSelector.js?v=26';
-import { createChatSidebar } from './components/chatSidebar.js?v=26';
-import { createChatView } from './components/chatView.js?v=26';
-import { createInputArea } from './components/inputArea.js?v=26';
-import { createSettingsPanel } from './components/settingsPanel.js?v=26';
-import { createContextMeter } from './components/contextMeter.js?v=26';
-import { ollamaService } from './services/ollamaService.js?v=26';
-import { eventBus, Events } from './utils/eventBus.js?v=26';
+import { createModelSelector } from './components/modelSelector.js?v=27';
+import { createChatSidebar } from './components/chatSidebar.js?v=27';
+import { createChatView } from './components/chatView.js?v=27';
+import { createInputArea } from './components/inputArea.js?v=27';
+import { createSettingsPanel } from './components/settingsPanel.js?v=27';
+import { createContextMeter } from './components/contextMeter.js?v=27';
+import { providerManager } from './services/providerManager.js?v=27';
+import { eventBus, Events } from './utils/eventBus.js?v=27';
 
 class App {
     constructor() {
@@ -23,8 +23,8 @@ class App {
     async init() {
         console.log('Initializing Synapse...');
 
-        // Check Ollama connectivity
-        await this.checkOllamaConnection();
+        // Check connectivity for active provider
+        await this.checkProviderConnection();
 
         // Initialize components
         this.modelSelector = createModelSelector('model-selector-container');
@@ -40,31 +40,38 @@ class App {
         console.log('Synapse initialized successfully');
     }
 
-    async checkOllamaConnection() {
+    async checkProviderConnection() {
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
+        const provider = providerManager.getProvider();
+        const label = providerManager.getProviderLabel();
 
-        const isAvailable = await ollamaService.isServerAvailable();
+        const isAvailable = await provider.isServerAvailable();
 
         if (isAvailable) {
             statusDot?.classList.remove('offline');
-            if (statusText) statusText.textContent = 'Connected to Ollama';
+            if (statusText) statusText.textContent = `Connected to ${label}`;
         } else {
             statusDot?.classList.add('offline');
-            if (statusText) statusText.textContent = 'Ollama not connected';
-            console.warn('Ollama server is not available. Please ensure Ollama is running.');
+            if (statusText) statusText.textContent = `${label} not connected`;
+            console.warn(`${label} server is not available.`);
         }
     }
 
     setupGlobalEvents() {
-        // Periodically check Ollama connection
-        setInterval(() => this.checkOllamaConnection(), 30000);
+        // Periodically check provider connection
+        setInterval(() => this.checkProviderConnection(), 30000);
 
         // Handle visibility change to refresh connection
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                this.checkOllamaConnection();
+                this.checkProviderConnection();
             }
+        });
+
+        // Provider change - re-check connection
+        eventBus.on(Events.PROVIDER_CHANGED, () => {
+            this.checkProviderConnection();
         });
 
         // Keyboard shortcuts

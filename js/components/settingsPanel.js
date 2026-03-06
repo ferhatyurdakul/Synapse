@@ -1,11 +1,11 @@
 /**
  * SettingsPanel - Modal component for application settings
- * Supports per-model parameter configuration
+ * Supports per-model parameter configuration with multi-provider support
  */
 
-import { titleService } from '../services/titleService.js?v=26';
-import { ollamaService } from '../services/ollamaService.js?v=26';
-import { eventBus, Events } from '../utils/eventBus.js?v=26';
+import { titleService } from '../services/titleService.js?v=27';
+import { providerManager } from '../services/providerManager.js?v=27';
+import { eventBus, Events } from '../utils/eventBus.js?v=27';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -29,6 +29,7 @@ class SettingsPanel {
     constructor() {
         this.isOpen = false;
         this.models = [];
+        this.titleModels = [];
         this.selectedModel = null;
         this.modelContextMax = 131072;
         this.render();
@@ -36,6 +37,11 @@ class SettingsPanel {
     }
 
     render() {
+        const providers = providerManager.getAllProviders();
+        const providerOptions = providers.map(p =>
+            `<option value="${p.name}">${p.label}</option>`
+        ).join('');
+
         const modal = document.createElement('div');
         modal.id = 'settings-modal';
         modal.className = 'settings-modal hidden';
@@ -51,6 +57,13 @@ class SettingsPanel {
                         <h3>Model Parameters</h3>
                         <p class="settings-description">Configure parameters for each model. Settings are saved per-model.</p>
                         
+                        <div class="settings-field">
+                            <label for="param-provider-select">Provider</label>
+                            <select id="param-provider-select" class="settings-select">
+                                ${providerOptions}
+                            </select>
+                        </div>
+
                         <div class="settings-field">
                             <label for="param-model-select">Configure Model</label>
                             <select id="param-model-select" class="settings-select">
@@ -72,6 +85,12 @@ class SettingsPanel {
                     <div class="settings-section">
                         <h3>Application Settings</h3>
                         <p class="settings-description">General application configuration.</p>
+                        <div class="settings-field">
+                            <label for="title-provider-select">Title Generation Provider</label>
+                            <select id="title-provider-select" class="settings-select">
+                                ${providerOptions}
+                            </select>
+                        </div>
                         <div class="settings-field">
                             <label for="title-model-select">Title Generation Model</label>
                             <select id="title-model-select" class="settings-select">
@@ -121,13 +140,29 @@ class SettingsPanel {
             }
         });
 
+        // Provider change for model params
+        document.getElementById('param-provider-select').addEventListener('change', async (e) => {
+            await this.loadModelsForProvider(e.target.value, 'param-model-select');
+            const model = document.getElementById('param-model-select').value;
+            if (model) {
+                this.selectedModel = model;
+                await this.loadModelSettings(model, e.target.value);
+            }
+        });
+
         // Model selector change - load that model's settings
         document.getElementById('param-model-select').addEventListener('change', async (e) => {
             const model = e.target.value;
             if (model) {
                 this.selectedModel = model;
-                await this.loadModelSettings(model);
+                const provider = document.getElementById('param-provider-select').value;
+                await this.loadModelSettings(model, provider);
             }
+        });
+
+        // Title provider change
+        document.getElementById('title-provider-select').addEventListener('change', async (e) => {
+            await this.loadModelsForProvider(e.target.value, 'title-model-select');
         });
 
         // Slider value updates
@@ -137,7 +172,6 @@ class SettingsPanel {
 
             slider.addEventListener('input', (e) => {
                 let value = parseFloat(e.target.value);
-                // Format display based on parameter type
                 if (param === 'num_ctx' || param === 'top_k') {
                     valueDisplay.textContent = Math.round(value);
                 } else {
@@ -150,7 +184,15 @@ class SettingsPanel {
     async open() {
         this.isOpen = true;
         document.getElementById('settings-modal').classList.remove('hidden');
-        await this.loadModels();
+
+        // Set param provider to current active provider
+        const paramProviderSelect = document.getElementById('param-provider-select');
+        paramProviderSelect.value = providerManager.getProviderName();
+        await this.loadModelsForProvider(paramProviderSelect.value, 'param-model-select');
+
+        // Load title provider/model
+        await this.loadTitleSettings();
+
         this.loadCurrentSettings();
     }
 
@@ -159,51 +201,72 @@ class SettingsPanel {
         document.getElementById('settings-modal').classList.add('hidden');
     }
 
-    async loadModels() {
-        const paramSelect = document.getElementById('param-model-select');
-        const titleSelect = document.getElementById('title-model-select');
-
+    async loadModelsForProvider(providerName, selectId) {
+        const select = document.getElementById(selectId);
         try {
-            this.models = await ollamaService.listModels();
+            const provider = providerManager.getProviderByName(providerName);
+            if (!provider) throw new Error('Unknown provider');
 
-            const options = this.models.map(model =>
+            const models = await provider.listModels();
+
+            if (selectId === 'param-model-select') {
+                this.models = models;
+            } else {
+                this.titleModels = models;
+            }
+
+            const options = models.map(model =>
                 `<option value="${model.name}">${model.name}</option>`
             ).join('');
 
-            paramSelect.innerHTML = options || '<option value="">No models available</option>';
-            titleSelect.innerHTML = options || '<option value="">No models available</option>';
+            select.innerHTML = options || '<option value="">No models available</option>';
 
-            // Set default selected model for params
-            if (this.models.length > 0) {
-                this.selectedModel = this.models[0].name;
-                await this.loadModelSettings(this.selectedModel);
+            // Set default model
+            if (models.length > 0 && selectId === 'param-model-select') {
+                this.selectedModel = models[0].name;
+                await this.loadModelSettings(this.selectedModel, providerName);
             }
         } catch (error) {
-            console.error('Failed to load models:', error);
-            paramSelect.innerHTML = '<option value="">Failed to load models</option>';
-            titleSelect.innerHTML = '<option value="">Failed to load models</option>';
+            console.error(`Failed to load models for ${providerName}:`, error);
+            select.innerHTML = '<option value="">Failed to load models</option>';
         }
     }
 
-    async loadModelSettings(modelName) {
-        // Get model info to find max context length
-        const modelInfo = await ollamaService.getModelInfo(modelName);
-        this.modelContextMax = modelInfo.contextLength || 131072;
+    async loadTitleSettings() {
+        const titleProviderSelect = document.getElementById('title-provider-select');
+        const titleProvider = titleService.getTitleProvider();
+        titleProviderSelect.value = titleProvider;
 
-        // Update context length slider max
+        await this.loadModelsForProvider(titleProvider, 'title-model-select');
+
+        const titleModelSelect = document.getElementById('title-model-select');
+        const currentTitleModel = titleService.getTitleModel();
+        if (currentTitleModel && titleModelSelect.querySelector(`option[value="${currentTitleModel}"]`)) {
+            titleModelSelect.value = currentTitleModel;
+        }
+    }
+
+    async loadModelSettings(modelName, providerName) {
+        try {
+            const provider = providerManager.getProviderByName(providerName);
+            if (!provider) return;
+
+            const modelInfo = await provider.getModelInfo(modelName);
+            this.modelContextMax = modelInfo.contextLength || 131072;
+        } catch {
+            this.modelContextMax = 131072;
+        }
+
         const ctxSlider = document.getElementById('num_ctx-slider');
         ctxSlider.max = this.modelContextMax;
 
-        // Load saved settings for this model
         const allSettings = this.getAllModelSettings();
         const modelSettings = allSettings[modelName] || { ...DEFAULT_PARAMS };
 
-        // Ensure context doesn't exceed model max
         if (modelSettings.num_ctx > this.modelContextMax) {
             modelSettings.num_ctx = this.modelContextMax;
         }
 
-        // Update all sliders
         Object.keys(PARAM_DEFS).forEach(param => {
             const slider = document.getElementById(`${param}-slider`);
             const valueDisplay = document.getElementById(`${param}-value`);
@@ -219,15 +282,7 @@ class SettingsPanel {
     }
 
     loadCurrentSettings() {
-        // Load title model
-        const titleSelect = document.getElementById('title-model-select');
-        const currentTitleModel = titleService.getTitleModel();
-
-        if (currentTitleModel && titleSelect.querySelector(`option[value="${currentTitleModel}"]`)) {
-            titleSelect.value = currentTitleModel;
-        } else if (this.models.length > 0) {
-            titleSelect.value = this.models[0].name;
-        }
+        // Already handled in open()
     }
 
     getAllModelSettings() {
@@ -249,7 +304,6 @@ class SettingsPanel {
             const valueDisplay = document.getElementById(`${param}-value`);
             let value = DEFAULT_PARAMS[param];
 
-            // Clamp context to model max
             if (param === 'num_ctx' && value > this.modelContextMax) {
                 value = this.modelContextMax;
             }
@@ -264,7 +318,7 @@ class SettingsPanel {
     }
 
     save() {
-        // Save model parameters for selected model
+        // Save model parameters
         if (this.selectedModel) {
             const settings = {};
             Object.keys(PARAM_DEFS).forEach(param => {
@@ -274,15 +328,19 @@ class SettingsPanel {
             this.saveModelSettings(this.selectedModel, settings);
         }
 
-        // Save title model
+        // Save title provider + model
+        const titleProviderSelect = document.getElementById('title-provider-select');
         const titleSelect = document.getElementById('title-model-select');
+        const selectedTitleProvider = titleProviderSelect.value;
         const selectedTitleModel = titleSelect.value;
         if (selectedTitleModel) {
             titleService.setTitleModel(selectedTitleModel);
+            titleService.setTitleProvider(selectedTitleProvider);
         }
 
         this.close();
         eventBus.emit(Events.SETTINGS_UPDATED, {
+            titleProvider: selectedTitleProvider,
             titleModel: selectedTitleModel,
             modelSettings: this.getAllModelSettings()
         });
@@ -309,7 +367,7 @@ export function openSettings() {
 /**
  * Get model parameters for a specific model
  * @param {string} modelName - Model name
- * @returns {Object} Parameters object with temperature, top_p, top_k, repeat_penalty, num_ctx
+ * @returns {Object} Parameters object
  */
 export function getModelParams(modelName) {
     const stored = localStorage.getItem('synapse_model_settings');

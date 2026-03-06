@@ -3,7 +3,7 @@
  * Uses actual token counts from Ollama to decide when to summarize
  */
 
-import { ollamaService } from './ollamaService.js?v=26';
+import { providerManager } from './providerManager.js?v=27';
 
 // Summarize when usage exceeds this fraction of max context
 const SUMMARIZE_THRESHOLD = 0.7;
@@ -113,7 +113,7 @@ class ContextService {
             return `${prefix}: ${msg.content}`;
         }).join('\n\n');
 
-        const result = await ollamaService.chat(
+        const result = await providerManager.getProvider().chat(
             model,
             [
                 { role: 'system', content: SUMMARIZE_PROMPT },

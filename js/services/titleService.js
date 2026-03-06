@@ -1,9 +1,10 @@
 /**
  * TitleService - Generates chat titles using AI models
+ * Supports multiple providers (Ollama, LM Studio)
  */
 
-import { ollamaService } from './ollamaService.js?v=26';
-import { storageService } from './storageService.js?v=26';
+import { providerManager } from './providerManager.js?v=27';
+import { storageService } from './storageService.js?v=27';
 
 const TITLE_PROMPT = `### Task:
 Generate a concise, 3-5 word title with an emoji summarizing the chat history.
@@ -35,6 +36,25 @@ class TitleService {
     }
 
     /**
+     * Get the provider used for title generation
+     * @returns {string}
+     */
+    getTitleProvider() {
+        const settings = storageService.loadSettings();
+        return settings.titleProvider || 'ollama';
+    }
+
+    /**
+     * Set the provider used for title generation
+     * @param {string} provider
+     */
+    setTitleProvider(provider) {
+        const settings = storageService.loadSettings();
+        settings.titleProvider = provider;
+        storageService.saveSettings(settings);
+    }
+
+    /**
      * Get the model used for title generation
      * @returns {string}
      */
@@ -54,18 +74,23 @@ class TitleService {
     }
 
     /**
-     * Generate a title for a chat based on the first message
-     * @param {string} userMessage - The user's first message
-     * @param {string} assistantMessage - The assistant's first response
-     * @returns {Promise<string>} Generated title
+     * Generate a title for a chat
+     * @param {string} userMessage
+     * @param {string} assistantMessage
+     * @returns {Promise<string>}
      */
     async generateTitle(userMessage, assistantMessage = '') {
         const model = this.getTitleModel();
+        const titleProviderName = this.getTitleProvider();
+        const provider = providerManager.getProviderByName(titleProviderName);
 
-        // Build chat history for the prompt
+        if (!provider) {
+            console.warn('[TitleService] Unknown provider, using active provider');
+            return this.fallbackTitle(userMessage);
+        }
+
         let chatHistory = `User: ${userMessage}`;
         if (assistantMessage) {
-            // Truncate if too long
             const truncatedResponse = assistantMessage.length > 500
                 ? assistantMessage.substring(0, 500) + '...'
                 : assistantMessage;
@@ -76,27 +101,16 @@ class TitleService {
 
         try {
             const messages = [{ role: 'user', content: prompt }];
-            console.log('[TitleService] Generating title with model:', model);
+            console.log(`[TitleService] Generating title with ${titleProviderName}/${model}`);
 
-            // Use non-streaming for title generation
-            const response = await fetch(`${ollamaService.baseUrl}/api/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    stream: false
-                })
-            });
+            const result = await provider.chat(
+                model,
+                messages,
+                () => { }, // No streaming needed
+                { options: { temperature: 0.3, num_ctx: 2048 } }
+            );
 
-            console.log('[TitleService] Response status:', response.status);
-
-            if (!response.ok) {
-                throw new Error(`Title generation failed: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const content = data.message?.content || '';
+            const content = result.content || '';
             console.log('[TitleService] AI response content:', content);
 
             const title = this.parseTitle(content, userMessage);
@@ -104,20 +118,15 @@ class TitleService {
             return title;
         } catch (error) {
             console.error('[TitleService] Title generation error:', error);
-            // Fallback to simple title extraction
             return this.fallbackTitle(userMessage);
         }
     }
 
     /**
      * Parse the title from AI response
-     * @param {string} content - AI response content
-     * @param {string} fallbackMessage - Fallback message for title
-     * @returns {string}
      */
     parseTitle(content, fallbackMessage) {
         try {
-            // Try to extract JSON from the response
             const jsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
@@ -126,7 +135,6 @@ class TitleService {
                 }
             }
 
-            // If no valid JSON, try to use the content directly if short enough
             const cleaned = content.replace(/[{}"]/g, '').trim();
             if (cleaned.length > 0 && cleaned.length < 60) {
                 return cleaned;
@@ -140,8 +148,6 @@ class TitleService {
 
     /**
      * Generate a simple fallback title
-     * @param {string} message - User message
-     * @returns {string}
      */
     fallbackTitle(message) {
         const maxLength = 40;
@@ -152,5 +158,4 @@ class TitleService {
     }
 }
 
-// Export singleton instance
 export const titleService = new TitleService();

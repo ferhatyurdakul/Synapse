@@ -1,11 +1,11 @@
 /**
- * ModelSelector - Dropdown component for selecting Ollama models
+ * ModelSelector - Dropdown component for selecting provider and model
  */
 
-import { ollamaService } from '../services/ollamaService.js?v=26';
-import { chatService } from '../services/chatService.js?v=26';
-import { storageService } from '../services/storageService.js?v=26';
-import { eventBus, Events } from '../utils/eventBus.js?v=26';
+import { providerManager } from '../services/providerManager.js?v=27';
+import { chatService } from '../services/chatService.js?v=27';
+import { storageService } from '../services/storageService.js?v=27';
+import { eventBus, Events } from '../utils/eventBus.js?v=27';
 
 class ModelSelector {
     constructor(containerId) {
@@ -23,10 +23,21 @@ class ModelSelector {
     }
 
     render() {
+        const providers = providerManager.getAllProviders();
+        const currentProvider = providerManager.getProviderName();
+
         this.container.innerHTML = `
             <div class="model-selector">
-                <label for="model-select">
-                    <span class="label-icon">▸</span> MODEL
+                <label for="provider-select">
+                    <span class="label-icon">▸</span> PROVIDER
+                </label>
+                <select id="provider-select" class="terminal-select provider-select">
+                    ${providers.map(p => `
+                        <option value="${p.name}" ${p.name === currentProvider ? 'selected' : ''}>${p.label}</option>
+                    `).join('')}
+                </select>
+                <label for="model-select" class="model-label">
+                    MODEL
                 </label>
                 <select id="model-select" class="terminal-select">
                     <option value="">Loading models...</option>
@@ -42,7 +53,8 @@ class ModelSelector {
         const select = document.getElementById('model-select');
 
         try {
-            this.models = await ollamaService.listModels();
+            const provider = providerManager.getProvider();
+            this.models = await provider.listModels();
 
             if (this.models.length === 0) {
                 select.innerHTML = '<option value="">No models found</option>';
@@ -54,14 +66,17 @@ class ModelSelector {
 
             select.innerHTML = this.models.map(model => {
                 const name = model.name;
-                const size = this.formatSize(model.size);
+                const size = model.size ? ` (${this.formatSize(model.size)})` : '';
                 return `<option value="${name}" ${settings.selectedModel === name ? 'selected' : ''}>
-                    ${name} (${size})
+                    ${name}${size}
                 </option>`;
             }).join('');
 
             // Set selected model
             this.selectedModel = settings.selectedModel || this.models[0].name;
+            if (!this.models.find(m => m.name === this.selectedModel)) {
+                this.selectedModel = this.models[0].name;
+            }
             select.value = this.selectedModel;
 
             eventBus.emit(Events.MODELS_LOADED, { models: this.models });
@@ -69,7 +84,8 @@ class ModelSelector {
 
         } catch (error) {
             console.error('Failed to load models:', error);
-            select.innerHTML = `<option value="">⚠ Ollama not connected</option>`;
+            const providerLabel = providerManager.getProviderLabel();
+            select.innerHTML = `<option value="">⚠ ${providerLabel} not connected</option>`;
         }
     }
 
@@ -80,10 +96,16 @@ class ModelSelector {
     }
 
     attachEvents() {
-        const select = document.getElementById('model-select');
+        const providerSelect = document.getElementById('provider-select');
+        const modelSelect = document.getElementById('model-select');
         const refreshBtn = document.getElementById('refresh-models');
 
-        select.addEventListener('change', (e) => {
+        providerSelect.addEventListener('change', async (e) => {
+            providerManager.setProvider(e.target.value);
+            await this.loadModels();
+        });
+
+        modelSelect.addEventListener('change', (e) => {
             this.selectedModel = e.target.value;
 
             // Save preference

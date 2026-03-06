@@ -68,6 +68,9 @@ export const eventBus = new EventBus();
 
 // Event constants for type safety
 export const Events = {
+    // Provider events
+    PROVIDER_CHANGED: 'provider:changed',
+
     // Model events
     MODEL_CHANGED: 'model:changed',
     MODELS_LOADED: 'models:loaded',
