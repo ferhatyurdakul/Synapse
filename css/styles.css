@@ -498,19 +498,47 @@ body::before {
     margin-bottom: 20px;
 }
 
-.welcome-hints {
+.welcome-prompts {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    width: 100%;
+    max-width: 500px;
 }
 
-.hint {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    padding: 8px 12px;
+.prompt-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    padding: 12px 16px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.prompt-card:hover {
+    border-color: var(--accent-cyan);
+    background: rgba(0, 212, 255, 0.05);
+    box-shadow: var(--glow-cyan);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.prompt-card:active {
+    transform: translateY(0);
+}
+
+.prompt-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.prompt-text {
+    line-height: 1.4;
 }
 
 /* Messages */

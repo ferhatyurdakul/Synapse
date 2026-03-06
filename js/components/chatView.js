@@ -10,6 +10,24 @@ import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=27'
 import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=27';
 import { getModelParams } from './settingsPanel.js?v=27';
 
+const PROMPT_EXAMPLES = [
+    { icon: '💡', text: 'Explain quantum computing in simple terms' },
+    { icon: '📝', text: 'Write a short poem about the ocean' },
+    { icon: '🧮', text: 'Solve this: If a train travels 120km in 2 hours, what is its speed?' },
+    { icon: '🌍', text: 'What are the top 5 most visited countries in the world?' },
+    { icon: '🍳', text: 'Give me a quick recipe for pasta carbonara' },
+    { icon: '🎯', text: 'What are some effective productivity techniques?' },
+    { icon: '🧬', text: 'Explain how CRISPR gene editing works' },
+    { icon: '🚀', text: 'Compare SpaceX and NASA approaches to space exploration' },
+    { icon: '🎨', text: 'Describe the differences between impressionism and expressionism' },
+    { icon: '💻', text: 'Explain the difference between REST and GraphQL APIs' },
+    { icon: '📊', text: 'What are the pros and cons of remote work?' },
+    { icon: '🧠', text: 'How does memory work in the human brain?' },
+    { icon: '🎵', text: 'Recommend 5 albums that defined their genre' },
+    { icon: '🏗️', text: 'Explain microservices architecture vs monolithic' },
+    { icon: '🌱', text: 'What are practical ways to reduce carbon footprint?' }
+];
+
 class ChatView {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -29,19 +47,45 @@ class ChatView {
         this.container.innerHTML = `
             <div class="chat-view">
                 <div id="messages-container" class="messages-container">
-                    <div class="welcome-message">
-                        <div class="welcome-icon">⟩_</div>
-                        <h2>Welcome to Synapse</h2>
-                        <p>Select a model and start chatting with your local AI.</p>
-                        <div class="welcome-hints">
-                            <div class="hint">💡 Your conversations are stored locally</div>
-                            <div class="hint">🔒 No data is sent to external servers</div>
-                            <div class="hint">⚡ Responses stream in real-time</div>
-                        </div>
-                    </div>
+                    ${this.buildWelcomeScreen()}
                 </div>
             </div>
         `;
+        this.attachPromptClickHandlers();
+    }
+
+    buildWelcomeScreen() {
+        const prompts = this.getRandomPrompts(3);
+        return `
+            <div class="welcome-message">
+                <div class="welcome-icon">⟩_</div>
+                <h2>Welcome to Synapse</h2>
+                <p>Select a model and try a prompt to get started.</p>
+                <div class="welcome-prompts">
+                    ${prompts.map(p => `
+                        <div class="prompt-card" data-prompt="${p.text.replace(/"/g, '&quot;')}">
+                            <span class="prompt-icon">${p.icon}</span>
+                            <span class="prompt-text">${p.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    getRandomPrompts(count) {
+        const shuffled = [...PROMPT_EXAMPLES].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, count);
+    }
+
+    attachPromptClickHandlers() {
+        document.querySelectorAll('.prompt-card').forEach(card => {
+            card.addEventListener('click', () => {
+                if (!this.selectedModel) return;
+                const prompt = card.dataset.prompt;
+                eventBus.emit(Events.MESSAGE_SENT, { content: prompt });
+            });
+        });
     }
 
     listenToEvents() {
@@ -89,18 +133,8 @@ class ChatView {
         container.innerHTML = '';
 
         if (!chat || chat.messages.length === 0) {
-            container.innerHTML = `
-                <div class="welcome-message">
-                    <div class="welcome-icon">⟩_</div>
-                    <h2>Welcome to Synapse</h2>
-                    <p>Select a model and start chatting with your local AI.</p>
-                    <div class="welcome-hints">
-                        <div class="hint">💡 Your conversations are stored locally</div>
-                        <div class="hint">🔒 No data is sent to external servers</div>
-                        <div class="hint">⚡ Responses stream in real-time</div>
-                    </div>
-                </div>
-            `;
+            container.innerHTML = this.buildWelcomeScreen();
+            this.attachPromptClickHandlers();
             return;
         }
 
