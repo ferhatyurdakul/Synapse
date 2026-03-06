@@ -1,6 +1,6 @@
 /**
  * LMStudioService - Handles communication with LM Studio's OpenAI-compatible API
- * Supports model listing, chat streaming, and server availability checks
+ * Supports model listing, chat streaming, thinking mode, and server availability checks
  */
 
 const LMSTUDIO_BASE_URL = 'http://localhost:1234';
@@ -22,28 +22,52 @@ class LMStudioService {
         const data = await response.json();
         return (data.data || []).map(model => ({
             name: model.id,
-            size: 0 // LM Studio doesn't expose model size
+            size: 0 // LM Studio doesn't expose model size in list
         }));
     }
 
     /**
-     * Get model info (limited for LM Studio)
+     * Get model info including context length from LM Studio
      * @param {string} modelName
      * @returns {Promise<{contextLength: number}>}
      */
     async getModelInfo(modelName) {
-        // LM Studio doesn't expose context length via API
-        // Return a reasonable default
-        return { contextLength: 8192 };
+        try {
+            // LM Studio v1 API exposes model details via GET /v1/models/{id}
+            const response = await fetch(`${this.baseUrl}/v1/models/${encodeURIComponent(modelName)}`);
+            if (response.ok) {
+                const data = await response.json();
+                // LM Studio returns max_context_length in model info
+                const ctxLen = data.max_context_length || data.context_length || data.max_model_len || 0;
+                if (ctxLen > 0) {
+                    return { contextLength: ctxLen };
+                }
+            }
+        } catch (e) {
+            console.warn('[LMStudio] Could not fetch model info for', modelName, e);
+        }
+
+        // Fallback: try the native API endpoint
+        try {
+            const response = await fetch(`${this.baseUrl}/api/v0/models/${encodeURIComponent(modelName)}`);
+            if (response.ok) {
+                const data = await response.json();
+                const ctxLen = data.max_context_length || data.context_length || 0;
+                if (ctxLen > 0) {
+                    return { contextLength: ctxLen };
+                }
+            }
+        } catch (e) {
+            // Fallback failed
+        }
+
+        // Default fallback
+        return { contextLength: 32768 };
     }
 
     /**
      * Send a chat message with streaming response
-     * @param {string} model - Model name
-     * @param {Array<{role: string, content: string}>} messages - Chat history
-     * @param {Function} onChunk - Callback for each streamed chunk
-     * @param {Object} options - Additional options
-     * @returns {Promise<{content: string, thinking: string, promptEvalCount: number, evalCount: number, evalDuration: number, promptEvalDuration: number, totalDuration: number, doneReason: string}>}
+     * Handles thinking mode via <think> tags and token usage via stream_options
      */
     async chat(model, messages, onChunk, options = {}) {
         this.abort();
@@ -52,7 +76,9 @@ class LMStudioService {
         const requestBody = {
             model,
             messages,
-            stream: true
+            stream: true,
+            // Request token usage in the final SSE chunk
+            stream_options: { include_usage: true }
         };
 
         // Map Ollama-style options to OpenAI-style params
@@ -60,7 +86,9 @@ class LMStudioService {
             if (options.options.temperature !== undefined) requestBody.temperature = options.options.temperature;
             if (options.options.top_p !== undefined) requestBody.top_p = options.options.top_p;
             if (options.options.num_ctx !== undefined) requestBody.max_tokens = options.options.num_ctx;
-            if (options.options.repeat_penalty !== undefined) requestBody.frequency_penalty = options.options.repeat_penalty - 1; // LM Studio uses -2 to 2 scale
+            if (options.options.repeat_penalty !== undefined) {
+                requestBody.frequency_penalty = Math.max(-2, Math.min(2, options.options.repeat_penalty - 1));
+            }
         }
 
         const startTime = Date.now();
@@ -81,7 +109,10 @@ class LMStudioService {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let fullContent = '';
+            let rawContent = '';       // Raw content including <think> tags
+            let fullContent = '';      // Content without thinking
+            let fullThinking = '';     // Thinking content only
+            let isInThinking = false;  // Currently inside <think> block
             let promptTokens = 0;
             let completionTokens = 0;
             let finishReason = 'stop';
@@ -109,14 +140,25 @@ class LMStudioService {
                         const delta = json.choices?.[0]?.delta;
                         if (delta?.content) {
                             if (!firstTokenTime) firstTokenTime = Date.now();
-                            fullContent += delta.content;
+                            rawContent += delta.content;
+
+                            // Parse thinking blocks from the content
+                            const parsed = this.processStreamChunk(delta.content, isInThinking);
+                            isInThinking = parsed.isInThinking;
+
+                            if (parsed.thinkingContent) {
+                                fullThinking += parsed.thinkingContent;
+                            }
+                            if (parsed.regularContent) {
+                                fullContent += parsed.regularContent;
+                            }
 
                             onChunk({
-                                content: delta.content,
+                                content: parsed.regularContent,
                                 fullContent,
-                                thinking: '',
-                                fullThinking: '',
-                                isThinking: false,
+                                thinking: parsed.thinkingContent,
+                                fullThinking,
+                                isThinking: isInThinking,
                                 done: false
                             });
                         }
@@ -126,7 +168,7 @@ class LMStudioService {
                             finishReason = json.choices[0].finish_reason;
                         }
 
-                        // Token usage (usually in the last chunk)
+                        // Token usage (in the final chunk when stream_options.include_usage is true)
                         if (json.usage) {
                             promptTokens = json.usage.prompt_tokens || 0;
                             completionTokens = json.usage.completion_tokens || 0;
@@ -140,13 +182,13 @@ class LMStudioService {
             this.abortController = null;
 
             const endTime = Date.now();
-            const totalDuration = (endTime - startTime) * 1e6; // Convert ms to ns
+            const totalDuration = (endTime - startTime) * 1e6; // Convert ms to ns (match Ollama format)
             const promptEvalDuration = firstTokenTime ? (firstTokenTime - startTime) * 1e6 : 0;
             const evalDuration = firstTokenTime ? (endTime - firstTokenTime) * 1e6 : totalDuration;
 
             return {
                 content: fullContent,
-                thinking: '',
+                thinking: fullThinking,
                 promptEvalCount: promptTokens,
                 evalCount: completionTokens,
                 evalDuration,
@@ -161,6 +203,49 @@ class LMStudioService {
             }
             throw error;
         }
+    }
+
+    /**
+     * Process a stream chunk to detect and separate <think>...</think> blocks
+     * Same logic as OllamaService.processStreamChunk
+     * @private
+     */
+    processStreamChunk(chunk, isInThinking) {
+        let regularContent = '';
+        let thinkingContent = '';
+        let currentInThinking = isInThinking;
+
+        let remaining = chunk;
+
+        while (remaining.length > 0) {
+            if (currentInThinking) {
+                const closeIndex = remaining.indexOf('</think>');
+                if (closeIndex !== -1) {
+                    thinkingContent += remaining.substring(0, closeIndex);
+                    remaining = remaining.substring(closeIndex + 8);
+                    currentInThinking = false;
+                } else {
+                    thinkingContent += remaining;
+                    remaining = '';
+                }
+            } else {
+                const openIndex = remaining.indexOf('<think>');
+                if (openIndex !== -1) {
+                    regularContent += remaining.substring(0, openIndex);
+                    remaining = remaining.substring(openIndex + 7);
+                    currentInThinking = true;
+                } else {
+                    regularContent += remaining;
+                    remaining = '';
+                }
+            }
+        }
+
+        return {
+            regularContent,
+            thinkingContent,
+            isInThinking: currentInThinking
+        };
     }
 
     /**
