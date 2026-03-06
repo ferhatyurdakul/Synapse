@@ -36,11 +36,7 @@ class ContextMeter {
             this.update(data.used, data.max, data.summarized);
         });
 
-        // Show dash on chat switch / new chat (no data yet)
-        eventBus.on(Events.CHAT_SELECTED, () => {
-            this.reset();
-        });
-
+        // Reset only on new chat creation (empty chat)
         eventBus.on(Events.CHAT_CREATED, () => {
             this.reset();
         });

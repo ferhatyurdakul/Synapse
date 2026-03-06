@@ -112,9 +112,10 @@ class ChatService {
      * @param {string} role - 'user' or 'assistant'
      * @param {string} content - Message content
      * @param {string} thinking - Optional thinking content
+     * @param {Object} stats - Optional message stats (tok/s, tokens, etc.)
      * @returns {Object} The added message
      */
-    addMessage(role, content, thinking = '') {
+    addMessage(role, content, thinking = '', stats = null) {
         if (!this.currentChatId) {
             throw new Error('No active chat');
         }
@@ -127,6 +128,11 @@ class ChatService {
             thinking,
             timestamp: new Date().toISOString()
         };
+
+        // Persist stats for assistant messages
+        if (stats && role === 'assistant') {
+            message.stats = stats;
+        }
 
         chat.messages.push(message);
         chat.updatedAt = new Date().toISOString();
@@ -297,6 +303,18 @@ class ChatService {
     updateTokenCount(tokenCount) {
         if (this.currentChatId && this.chats[this.currentChatId]) {
             this.chats[this.currentChatId].lastTokenCount = tokenCount;
+            this.save();
+        }
+    }
+
+    /**
+     * Save context meter data for current chat
+     * @param {number} used - Tokens used
+     * @param {number} max - Max context tokens
+     */
+    updateContextData(used, max) {
+        if (this.currentChatId && this.chats[this.currentChatId]) {
+            this.chats[this.currentChatId].contextData = { used, max };
             this.save();
         }
     }

@@ -140,8 +140,17 @@ class ChatView {
 
         chat.messages.forEach((msg, index) => {
             const isLastUserMsg = msg.role === 'user' && index === chat.messages.length - 1;
-            this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, isLastUserMsg);
+            this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, isLastUserMsg, msg.stats);
         });
+
+        // Restore context meter data for this chat
+        if (chat.contextData) {
+            eventBus.emit(Events.CONTEXT_UPDATED, {
+                used: chat.contextData.used,
+                max: chat.contextData.max,
+                model: chat.model
+            });
+        }
 
         // Initialize Lucide icons
         if (typeof lucide !== 'undefined') {
@@ -235,8 +244,21 @@ class ChatView {
                 summarized: prepared.summarized
             });
 
+            // Persist context data for this chat
+            chatService.updateContextData(totalUsed, maxCtx);
+
             // Store actual token count for next summarization decision
             chatService.updateTokenCount(totalUsed);
+
+            // Build stats object to persist
+            const statsData = {
+                evalCount: result.evalCount,
+                evalDuration: result.evalDuration,
+                promptEvalCount: result.promptEvalCount,
+                promptEvalDuration: result.promptEvalDuration,
+                totalDuration: result.totalDuration,
+                doneReason: result.doneReason
+            };
 
             // Add message stats bar
             const stats = this.buildMessageStats(result);
@@ -244,8 +266,8 @@ class ChatView {
                 messageEl.appendChild(stats);
             }
 
-            // Save final message
-            chatService.addMessage('assistant', fullContent, fullThinking);
+            // Save final message with stats
+            chatService.addMessage('assistant', fullContent, fullThinking, statsData);
 
             // Generate title for new chats (after first exchange)
             const updatedChat = chatService.getCurrentChat();
@@ -310,7 +332,7 @@ class ChatView {
         return statsEl;
     }
 
-    appendMessage(role, content, thinking = '', animate = true, model = null, isLastUserMessage = false) {
+    appendMessage(role, content, thinking = '', animate = true, model = null, isLastUserMessage = false, stats = null) {
         const container = document.getElementById('messages-container');
 
         // Remove welcome message if present
@@ -362,6 +384,14 @@ class ChatView {
             const thinkingBlock = createThinkingBlock(thinking, getDefaultCollapsedState());
             const contentEl = messageEl.querySelector('.message-content');
             messageEl.insertBefore(thinkingBlock, contentEl);
+        }
+
+        // Add stats bar from saved data
+        if (stats && role === 'assistant') {
+            const statsEl = this.buildMessageStats(stats);
+            if (statsEl) {
+                messageEl.appendChild(statsEl);
+            }
         }
 
         container.appendChild(messageEl);
