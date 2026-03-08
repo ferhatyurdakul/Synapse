@@ -350,8 +350,9 @@ body::before {
 }
 
 .filter-actions {
-    justify-content: flex-end;
+    display: flex;
     align-items: flex-end;
+    justify-content: flex-end;
 }
 
 .filter-clear-btn {
@@ -360,9 +361,10 @@ body::before {
     border-radius: 4px;
     color: var(--text-muted);
     font-family: var(--font-mono);
-    font-size: var(--font-xs);
+    font-size: 0.55rem;
     padding: 4px 8px;
     cursor: pointer;
+    white-space: nowrap;
     transition: all var(--transition-fast);
 }
 
