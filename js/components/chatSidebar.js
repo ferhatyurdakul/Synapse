@@ -11,6 +11,8 @@ class ChatSidebar {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.selectedModel = null;
+        this.searchQuery = '';
+        this.searchDebounceTimer = null;
 
         this.init();
     }
@@ -37,6 +39,14 @@ class ChatSidebar {
                     </button>
                 </div>
                 
+                <div class="sidebar-search">
+                    <div class="search-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="chat-search-input" class="search-input" placeholder="Search chats...">
+                        <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">×</button>
+                    </div>
+                </div>
+
                 <div class="sidebar-section">
                     <div class="section-header">
                         <span>HISTORY</span>
@@ -72,6 +82,38 @@ class ChatSidebar {
         // New chat button
         document.getElementById('new-chat-btn').addEventListener('click', () => {
             this.createNewChat();
+        });
+
+        // Search input
+        const searchInput = document.getElementById('chat-search-input');
+        const clearBtn = document.getElementById('search-clear-btn');
+
+        searchInput.addEventListener('input', (e) => {
+            this.searchQuery = e.target.value.trim();
+            clearBtn.classList.toggle('hidden', !this.searchQuery);
+
+            // Debounce search for smooth typing
+            clearTimeout(this.searchDebounceTimer);
+            this.searchDebounceTimer = setTimeout(() => {
+                this.refreshChatList();
+            }, 150);
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                this.searchQuery = '';
+                clearBtn.classList.add('hidden');
+                this.refreshChatList();
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            this.searchQuery = '';
+            clearBtn.classList.add('hidden');
+            searchInput.focus();
+            this.refreshChatList();
         });
 
         // Import button
@@ -141,28 +183,73 @@ class ChatSidebar {
 
     refreshChatList() {
         const listEl = document.getElementById('chat-list');
-        const chats = chatService.getAllChats();
+        let chats = chatService.getAllChats();
         const currentId = chatService.getCurrentChatId();
+        const query = this.searchQuery.toLowerCase();
+
+        // Filter and search
+        let searchResults = null;
+        if (query) {
+            searchResults = new Map();
+            chats = chats.filter(chat => {
+                // Match title
+                if (chat.title.toLowerCase().includes(query)) {
+                    searchResults.set(chat.id, { type: 'title' });
+                    return true;
+                }
+                // Match message content
+                for (const msg of chat.messages) {
+                    if (msg.content && msg.content.toLowerCase().includes(query)) {
+                        // Get snippet around match
+                        const idx = msg.content.toLowerCase().indexOf(query);
+                        const start = Math.max(0, idx - 30);
+                        const end = Math.min(msg.content.length, idx + query.length + 30);
+                        let snippet = msg.content.substring(start, end).replace(/\n/g, ' ');
+                        if (start > 0) snippet = '...' + snippet;
+                        if (end < msg.content.length) snippet += '...';
+                        searchResults.set(chat.id, { type: 'message', snippet, role: msg.role });
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
 
         if (chats.length === 0) {
-            listEl.innerHTML = `
-                <div class="empty-state">
-                    No chats yet.<br>
-                    Click "New Chat" to start.
-                </div>
-            `;
+            listEl.innerHTML = query
+                ? `<div class="empty-state">No results for "${this.escapeHtml(query)}"</div>`
+                : `<div class="empty-state">No chats yet.<br>Click "New Chat" to start.</div>`;
             return;
         }
 
-        listEl.innerHTML = chats.map(chat => `
-            <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}">
-                <div class="chat-item-content">
-                    <span class="chat-icon">💬</span>
-                    <span class="chat-title">${this.escapeHtml(chat.title)}</span>
+        listEl.innerHTML = chats.map(chat => {
+            const title = query
+                ? this.highlightMatch(this.escapeHtml(chat.title), query)
+                : this.escapeHtml(chat.title);
+
+            // Build snippet line for message matches
+            let snippetHtml = '';
+            if (searchResults && searchResults.has(chat.id)) {
+                const result = searchResults.get(chat.id);
+                if (result.type === 'message' && result.snippet) {
+                    const highlighted = this.highlightMatch(this.escapeHtml(result.snippet), query);
+                    snippetHtml = `<div class="chat-search-snippet">${highlighted}</div>`;
+                }
+            }
+
+            return `
+                <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}">
+                    <div class="chat-item-content">
+                        <span class="chat-icon">💬</span>
+                        <div class="chat-item-text">
+                            <span class="chat-title">${title}</span>
+                            ${snippetHtml}
+                        </div>
+                    </div>
+                    <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat">×</button>
                 </div>
-                <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat">×</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         // Attach click handlers
         listEl.querySelectorAll('.chat-item').forEach(item => {
@@ -181,6 +268,12 @@ class ChatSidebar {
                 chatService.deleteChat(btn.dataset.id);
             });
         });
+    }
+
+    highlightMatch(text, query) {
+        if (!query) return text;
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
     }
 
     handleImport(e) {
