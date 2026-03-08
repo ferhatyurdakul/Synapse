@@ -283,11 +283,11 @@ body::before {
     border-radius: 50%;
 }
 
-/* Filter panel */
+/* Filter panel grid */
 .filter-panel {
     padding: 8px 0 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px;
     animation: filterSlideDown 0.15s ease-out;
 }
@@ -308,13 +308,7 @@ body::before {
     }
 }
 
-.filter-row {
-    display: flex;
-    gap: 6px;
-}
-
 .filter-field {
-    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -337,6 +331,8 @@ body::before {
     padding: 4px 6px;
     cursor: pointer;
     outline: none;
+    width: 100%;
+    box-sizing: border-box;
     transition: border-color var(--transition-fast);
 }
 
@@ -352,7 +348,6 @@ body::before {
 .filter-actions {
     display: flex;
     align-items: flex-end;
-    justify-content: flex-end;
 }
 
 .filter-clear-btn {
@@ -361,10 +356,12 @@ body::before {
     border-radius: 4px;
     color: var(--text-muted);
     font-family: var(--font-mono);
-    font-size: 0.55rem;
-    padding: 4px 8px;
+    font-size: var(--font-xs);
+    padding: 4px 6px;
     cursor: pointer;
     white-space: nowrap;
+    width: 100%;
+    box-sizing: border-box;
     transition: all var(--transition-fast);
 }
 

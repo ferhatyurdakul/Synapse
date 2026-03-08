@@ -56,33 +56,30 @@ class ChatSidebar {
                         </button>
                     </div>
                     <div id="filter-panel" class="filter-panel hidden">
-                        <div class="filter-row">
-                            <div class="filter-field">
-                                <label>Provider</label>
-                                <select id="filter-provider" class="filter-select">
-                                    <option value="">All</option>
-                                </select>
-                            </div>
-                            <div class="filter-field">
-                                <label>Model</label>
-                                <select id="filter-model" class="filter-select">
-                                    <option value="">All</option>
-                                </select>
-                            </div>
+                        <div class="filter-field">
+                            <label>Provider</label>
+                            <select id="filter-provider" class="filter-select">
+                                <option value="">All</option>
+                            </select>
                         </div>
-                        <div class="filter-row">
-                            <div class="filter-field">
-                                <label>Date</label>
-                                <select id="filter-date" class="filter-select">
-                                    <option value="">All time</option>
-                                    <option value="today">Today</option>
-                                    <option value="week">This week</option>
-                                    <option value="month">This month</option>
-                                </select>
-                            </div>
-                            <div class="filter-field filter-actions">
-                                <button id="filter-clear-btn" class="filter-clear-btn">Clear filters</button>
-                            </div>
+                        <div class="filter-field">
+                            <label>Model</label>
+                            <select id="filter-model" class="filter-select">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div class="filter-field">
+                            <label>Date</label>
+                            <select id="filter-date" class="filter-select">
+                                <option value="">All time</option>
+                                <option value="today">Today</option>
+                                <option value="week">This week</option>
+                                <option value="month">This month</option>
+                            </select>
+                        </div>
+                        <div class="filter-field filter-actions">
+                            <label>&nbsp;</label>
+                            <button id="filter-clear-btn" class="filter-clear-btn">Clear filters</button>
                         </div>
                     </div>
                 </div>
