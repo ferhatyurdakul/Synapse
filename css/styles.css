@@ -604,6 +604,7 @@ body::before {
     border-radius: 8px;
     cursor: pointer;
     transition: all var(--transition-fast);
+    text-align: left;
 }
 
 .prompt-card:hover {
