@@ -5,6 +5,7 @@
 
 import { storageService } from './storageService.js?v=27';
 import { contextService } from './contextService.js?v=27';
+import { providerManager } from './providerManager.js?v=27';
 import { eventBus, Events } from '../utils/eventBus.js?v=27';
 
 /**
@@ -61,6 +62,7 @@ class ChatService {
             id,
             title: 'New Chat',
             model,
+            provider: providerManager.getProviderName(),
             messages: [],
             summary: null,
             summarizedUpTo: 0,

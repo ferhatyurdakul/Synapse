@@ -4,6 +4,7 @@
  */
 
 import { chatService } from '../services/chatService.js?v=27';
+import { providerManager } from '../services/providerManager.js?v=27';
 import { eventBus, Events } from '../utils/eventBus.js?v=27';
 import { openSettings } from './settingsPanel.js?v=27';
 
@@ -13,6 +14,12 @@ class ChatSidebar {
         this.selectedModel = null;
         this.searchQuery = '';
         this.searchDebounceTimer = null;
+        this.filtersVisible = false;
+        this.filters = {
+            provider: '',
+            model: '',
+            dateRange: ''
+        };
 
         this.init();
     }
@@ -44,6 +51,39 @@ class ChatSidebar {
                         <span class="search-icon">🔍</span>
                         <input type="text" id="chat-search-input" class="search-input" placeholder="Search chats...">
                         <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">×</button>
+                        <button id="filter-toggle-btn" class="filter-toggle-btn" title="Toggle filters">
+                            <span class="filter-icon">☰</span>
+                        </button>
+                    </div>
+                    <div id="filter-panel" class="filter-panel hidden">
+                        <div class="filter-row">
+                            <div class="filter-field">
+                                <label>Provider</label>
+                                <select id="filter-provider" class="filter-select">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                            <div class="filter-field">
+                                <label>Model</label>
+                                <select id="filter-model" class="filter-select">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="filter-row">
+                            <div class="filter-field">
+                                <label>Date</label>
+                                <select id="filter-date" class="filter-select">
+                                    <option value="">All time</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">This week</option>
+                                    <option value="month">This month</option>
+                                </select>
+                            </div>
+                            <div class="filter-field filter-actions">
+                                <button id="filter-clear-btn" class="filter-clear-btn">Clear filters</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -113,6 +153,37 @@ class ChatSidebar {
             this.searchQuery = '';
             clearBtn.classList.add('hidden');
             searchInput.focus();
+            this.refreshChatList();
+        });
+
+        // Filter toggle
+        const filterToggle = document.getElementById('filter-toggle-btn');
+        filterToggle.addEventListener('click', () => {
+            this.filtersVisible = !this.filtersVisible;
+            document.getElementById('filter-panel').classList.toggle('hidden', !this.filtersVisible);
+            filterToggle.classList.toggle('active', this.filtersVisible);
+            if (this.filtersVisible) {
+                this.populateFilterOptions();
+            }
+        });
+
+        // Filter change handlers
+        ['filter-provider', 'filter-model', 'filter-date'].forEach(id => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                const key = id.replace('filter-', '');
+                this.filters[key] = e.target.value;
+                this.updateFilterIndicator();
+                this.refreshChatList();
+            });
+        });
+
+        // Clear filters
+        document.getElementById('filter-clear-btn').addEventListener('click', () => {
+            this.filters = { provider: '', model: '', dateRange: '' };
+            document.getElementById('filter-provider').value = '';
+            document.getElementById('filter-model').value = '';
+            document.getElementById('filter-date').value = '';
+            this.updateFilterIndicator();
             this.refreshChatList();
         });
 
@@ -187,7 +258,30 @@ class ChatSidebar {
         const currentId = chatService.getCurrentChatId();
         const query = this.searchQuery.toLowerCase();
 
-        // Filter and search
+        // Apply filters first
+        if (this.filters.provider) {
+            chats = chats.filter(c => (c.provider || '').toLowerCase() === this.filters.provider.toLowerCase());
+        }
+        if (this.filters.model) {
+            chats = chats.filter(c => c.model === this.filters.model);
+        }
+        if (this.filters.dateRange || this.filters.date) {
+            const range = this.filters.dateRange || this.filters.date;
+            const now = new Date();
+            let cutoff;
+            if (range === 'today') {
+                cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } else if (range === 'week') {
+                cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            } else if (range === 'month') {
+                cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            }
+            if (cutoff) {
+                chats = chats.filter(c => new Date(c.updatedAt || c.createdAt) >= cutoff);
+            }
+        }
+
+        // Text search
         let searchResults = null;
         if (query) {
             searchResults = new Map();
@@ -274,6 +368,36 @@ class ChatSidebar {
         if (!query) return text;
         const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    }
+
+    populateFilterOptions() {
+        const allChats = chatService.getAllChats();
+        const providers = new Set();
+        const models = new Set();
+
+        allChats.forEach(chat => {
+            if (chat.provider) providers.add(chat.provider);
+            if (chat.model) models.add(chat.model);
+        });
+
+        const providerSelect = document.getElementById('filter-provider');
+        const curProvider = this.filters.provider;
+        providerSelect.innerHTML = '<option value="">All</option>' +
+            [...providers].sort().map(p =>
+                `<option value="${p}" ${p === curProvider ? 'selected' : ''}>${p}</option>`
+            ).join('');
+
+        const modelSelect = document.getElementById('filter-model');
+        const curModel = this.filters.model;
+        modelSelect.innerHTML = '<option value="">All</option>' +
+            [...models].sort().map(m =>
+                `<option value="${m}" ${m === curModel ? 'selected' : ''}>${m}</option>`
+            ).join('');
+    }
+
+    updateFilterIndicator() {
+        const hasActive = this.filters.provider || this.filters.model || this.filters.date || this.filters.dateRange;
+        document.getElementById('filter-toggle-btn').classList.toggle('has-filters', !!hasActive);
     }
 
     handleImport(e) {
