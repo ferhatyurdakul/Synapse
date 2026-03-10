@@ -106,11 +106,63 @@ body::before {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    transition: width 0.2s ease;
+}
+
+.sidebar.collapsed {
+    width: 36px;
+}
+
+.sidebar.collapsed .title-text,
+.sidebar.collapsed .sidebar-actions,
+.sidebar.collapsed .sidebar-search,
+.sidebar.collapsed .sidebar-section,
+.sidebar.collapsed .sidebar-footer {
+    display: none;
 }
 
 .sidebar-header {
     padding: 6px 8px;
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar.collapsed .sidebar-header {
+    padding: 6px 4px;
+    justify-content: center;
+}
+
+.sidebar.collapsed .app-title {
+    display: none;
+}
+
+.sidebar-toggle-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.sidebar-toggle-btn:hover {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+.sidebar-toggle-btn .icon {
+    width: 14px;
+    height: 14px;
+}
+
+.sidebar.collapsed .sidebar-toggle-btn {
+    border: none;
 }
 
 .app-title {

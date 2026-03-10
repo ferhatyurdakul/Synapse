@@ -22,6 +22,7 @@ class ChatSidebar {
             containsCode: false,
             containsMath: false
         };
+        this.collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
 
         this.init();
     }
@@ -38,11 +39,15 @@ class ChatSidebar {
 
     render() {
         this.container.innerHTML = `
-            <div class="sidebar">
+            <div class="sidebar ${this.collapsed ? 'collapsed' : ''}">
                 <div class="sidebar-header">
                     <h1 class="app-title">
-                        <span class="title-icon">⟩</span> Synapse
+                        <span class="title-icon">⟩</span>
+                        <span class="title-text">Synapse</span>
                     </h1>
+                    <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="${this.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+                        <i data-lucide="${this.collapsed ? 'panel-left-open' : 'panel-left-close'}" class="icon"></i>
+                    </button>
                 </div>
                 
                 <div class="sidebar-actions">
@@ -128,6 +133,11 @@ class ChatSidebar {
     }
 
     attachEvents() {
+        // Sidebar toggle
+        document.getElementById('sidebar-toggle-btn').addEventListener('click', () => {
+            this.toggleSidebar();
+        });
+
         // New chat button
         document.getElementById('new-chat-btn').addEventListener('click', () => {
             this.createNewChat();
@@ -288,6 +298,20 @@ class ChatSidebar {
         }
 
         chatService.createChat(this.selectedModel || null);
+    }
+
+    toggleSidebar() {
+        this.collapsed = !this.collapsed;
+        localStorage.setItem('sidebar-collapsed', this.collapsed);
+
+        const sidebar = this.container.querySelector('.sidebar');
+        const toggleBtn = document.getElementById('sidebar-toggle-btn');
+
+        sidebar.classList.toggle('collapsed', this.collapsed);
+        toggleBtn.title = this.collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+        toggleBtn.innerHTML = `<i data-lucide="${this.collapsed ? 'panel-left-open' : 'panel-left-close'}" class="icon"></i>`;
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     refreshChatList() {
