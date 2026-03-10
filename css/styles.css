@@ -178,8 +178,8 @@ body::before {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 0 8px;
-    gap: 6px;
+    padding: 0 4px 0 8px;
+    gap: 2px;
     transition: border-color var(--transition-fast);
 }
 
@@ -194,6 +194,11 @@ body::before {
     flex-shrink: 0;
 }
 
+.search-wrapper .icon {
+    width: 14px;
+    height: 14px;
+}
+
 .search-input {
     flex: 1;
     background: none;
@@ -203,25 +208,33 @@ body::before {
     font-family: var(--font-mono);
     font-size: var(--font-xs);
     padding: 7px 0;
+    min-width: 0;
 }
 
 .search-input::placeholder {
     color: var(--text-muted);
 }
 
-.search-clear-btn {
+.search-clear-btn,
+.filter-toggle-btn {
     background: none;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 0.9rem;
-    padding: 0 2px;
-    line-height: 1;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
 }
 
-.search-clear-btn:hover {
+.search-clear-btn:hover,
+.filter-toggle-btn:hover {
     color: var(--text-primary);
+}
+
+.filter-toggle-btn.active {
+    color: var(--accent-cyan);
 }
 
 .search-clear-btn.hidden {
@@ -314,6 +327,10 @@ body::before {
     gap: 2px;
 }
 
+.full-width {
+    grid-column: span 2;
+}
+
 .filter-field label {
     font-size: 0.55rem;
     color: var(--text-muted);
@@ -348,6 +365,7 @@ body::before {
 .filter-actions {
     display: flex;
     align-items: flex-end;
+    margin-top: auto;
 }
 
 .filter-clear-btn {
@@ -368,6 +386,46 @@ body::before {
 .filter-clear-btn:hover {
     color: var(--text-primary);
     border-color: var(--text-muted);
+}
+
+.filter-flags {
+    grid-column: span 2;
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.filter-flag-btn {
+    flex: 1;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-family: var(--font-secondary);
+    font-size: var(--font-xs);
+    padding: 4px 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all var(--transition-fast);
+}
+
+.filter-flag-btn .icon {
+    width: 12px;
+    height: 12px;
+}
+
+.filter-flag-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+
+.filter-flag-btn.active {
+    background: rgba(0, 255, 255, 0.1);
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
 }
 
 .sidebar-section {
@@ -496,7 +554,7 @@ body::before {
 
 .footer-btn {
     flex: 1;
-    padding: 5px 8px;
+    padding: 6px 8px;
     font-family: var(--font-mono);
     font-size: var(--font-xs);
     background: var(--bg-tertiary);
@@ -504,7 +562,16 @@ body::before {
     border: 1px solid var(--border-color);
     border-radius: 3px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     transition: all var(--transition-fast);
+}
+
+.footer-btn .icon {
+    width: 14px;
+    height: 14px;
 }
 
 .footer-btn:hover:not(:disabled) {

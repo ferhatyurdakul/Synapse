@@ -365,7 +365,7 @@ class ChatView {
 
         // Add resend button only for user messages (will be shown only on last one)
         if (role === 'user') {
-            actionButtons += `<button class="message-action-btn resend-btn" onclick="resendMessage(this)" title="Resend message">🔄</button>`;
+            actionButtons += `<button class="message-action-btn resend-btn" onclick="resendMessage(this)" title="Resend message"><i data-lucide="refresh-cw" class="icon"></i></button>`;
         }
 
         messageEl.innerHTML = `

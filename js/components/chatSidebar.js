@@ -18,7 +18,9 @@ class ChatSidebar {
         this.filters = {
             provider: '',
             model: '',
-            dateRange: ''
+            dateRange: '',
+            containsCode: false,
+            containsMath: false
         };
 
         this.init();
@@ -29,6 +31,9 @@ class ChatSidebar {
         this.attachEvents();
         this.listenToEvents();
         this.refreshChatList();
+
+        // Render Lucide icons in sidebar
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     render() {
@@ -48,14 +53,22 @@ class ChatSidebar {
                 
                 <div class="sidebar-search">
                     <div class="search-wrapper">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon"><i data-lucide="search" class="icon"></i></span>
                         <input type="text" id="chat-search-input" class="search-input" placeholder="Search chats...">
                         <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">×</button>
                         <button id="filter-toggle-btn" class="filter-toggle-btn" title="Toggle filters">
-                            <span class="filter-icon">☰</span>
+                            <span class="filter-icon"><i data-lucide="filter" class="icon"></i></span>
                         </button>
                     </div>
                     <div id="filter-panel" class="filter-panel hidden">
+                        <div class="filter-flags">
+                            <button class="filter-flag-btn" data-flag="code">
+                                <i data-lucide="code" class="icon"></i> Code
+                            </button>
+                            <button class="filter-flag-btn" data-flag="math">
+                                <i data-lucide="function-square" class="icon"></i> Math
+                            </button>
+                        </div>
                         <div class="filter-field">
                             <label>Provider</label>
                             <select id="filter-provider" class="filter-select">
@@ -68,7 +81,7 @@ class ChatSidebar {
                                 <option value="">All</option>
                             </select>
                         </div>
-                        <div class="filter-field">
+                        <div class="filter-field full-width">
                             <label>Date</label>
                             <select id="filter-date" class="filter-select">
                                 <option value="">All time</option>
@@ -77,8 +90,7 @@ class ChatSidebar {
                                 <option value="month">This month</option>
                             </select>
                         </div>
-                        <div class="filter-field filter-actions">
-                            <label>&nbsp;</label>
+                        <div class="filter-field full-width filter-actions">
                             <button id="filter-clear-btn" class="filter-clear-btn">Clear filters</button>
                         </div>
                     </div>
@@ -95,17 +107,17 @@ class ChatSidebar {
                 
                 <div class="sidebar-footer">
                     <button id="settings-btn" class="footer-btn" title="Settings">
-                        ⚙️ Settings
+                        <i data-lucide="settings" class="icon"></i> Settings
                     </button>
                     <button id="delete-all-btn" class="footer-btn danger" title="Delete all chats">
-                        🗑 Delete All
+                        <i data-lucide="trash-2" class="icon"></i> Delete All
                     </button>
                     <div class="footer-row">
                         <button id="import-btn" class="footer-btn" title="Import chats">
-                            ↓ Import
+                            <i data-lucide="download" class="icon"></i> Import
                         </button>
                         <button id="export-btn" class="footer-btn" title="Export current chat" disabled>
-                            ↑ Export
+                            <i data-lucide="upload" class="icon"></i> Export
                         </button>
                     </div>
                 </div>
@@ -161,6 +173,7 @@ class ChatSidebar {
             filterToggle.classList.toggle('active', this.filtersVisible);
             if (this.filtersVisible) {
                 this.populateFilterOptions();
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
         });
 
@@ -176,12 +189,37 @@ class ChatSidebar {
 
         // Clear filters
         document.getElementById('filter-clear-btn').addEventListener('click', () => {
-            this.filters = { provider: '', model: '', dateRange: '' };
+            this.filters = { provider: '', model: '', dateRange: '', containsCode: false, containsMath: false };
             document.getElementById('filter-provider').value = '';
             document.getElementById('filter-model').value = '';
             document.getElementById('filter-date').value = '';
+
+            // Clear flag buttons UI
+            document.querySelectorAll('.filter-flag-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
             this.updateFilterIndicator();
             this.refreshChatList();
+        });
+
+        // Filter flags (Code / Math)
+        document.querySelectorAll('.filter-flag-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Toggle active UI state
+                btn.classList.toggle('active');
+
+                // Update internal filter state based on data-flag attribute
+                const flag = btn.dataset.flag;
+                if (flag === 'code') {
+                    this.filters.containsCode = btn.classList.contains('active');
+                } else if (flag === 'math') {
+                    this.filters.containsMath = btn.classList.contains('active');
+                }
+
+                this.updateFilterIndicator();
+                this.refreshChatList();
+            });
         });
 
         // Import button
@@ -241,6 +279,14 @@ class ChatSidebar {
     }
 
     createNewChat() {
+        // Fallback: read from the DOM selector if event hasn't fired yet
+        if (!this.selectedModel) {
+            const modelSelect = document.getElementById('model-select');
+            if (modelSelect && modelSelect.value) {
+                this.selectedModel = modelSelect.value;
+            }
+        }
+
         if (!this.selectedModel) {
             console.warn('No model selected');
             return;
@@ -276,6 +322,24 @@ class ChatSidebar {
             if (cutoff) {
                 chats = chats.filter(c => new Date(c.updatedAt || c.createdAt) >= cutoff);
             }
+        }
+
+        // Apply content flag filters
+        if (this.filters.containsCode) {
+            chats = chats.filter(chat => {
+                return chat.messages.some(msg => msg.content && msg.content.includes('```'));
+            });
+        }
+        if (this.filters.containsMath) {
+            chats = chats.filter(chat => {
+                // Look for typical math delimiters: $...$, \[...\], \(...\)
+                return chat.messages.some(msg => {
+                    if (!msg.content) return false;
+                    return msg.content.includes('$') ||
+                        msg.content.includes('\\[') ||
+                        msg.content.includes('\\(');
+                });
+            });
         }
 
         // Text search
@@ -393,7 +457,12 @@ class ChatSidebar {
     }
 
     updateFilterIndicator() {
-        const hasActive = this.filters.provider || this.filters.model || this.filters.date || this.filters.dateRange;
+        const hasActive = this.filters.provider ||
+            this.filters.model ||
+            this.filters.date ||
+            this.filters.dateRange ||
+            this.filters.containsCode ||
+            this.filters.containsMath;
         document.getElementById('filter-toggle-btn').classList.toggle('has-filters', !!hasActive);
     }
 
