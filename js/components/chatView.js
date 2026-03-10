@@ -500,7 +500,8 @@ class ChatView {
             minute: '2-digit'
         });
 
-        const modelDisplay = this.selectedModel || 'AI';
+        const chat = chatService.getCurrentChat();
+        const modelDisplay = (chat && chat.model) || this.selectedModel || 'AI';
 
         messageEl.innerHTML = `
             <div class="message-header">
