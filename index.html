@@ -120,9 +120,27 @@
             const message = btn.closest('.message');
             const content = message.querySelector('.message-content');
             const text = content.innerText || content.textContent;
-
-            // Dispatch custom event for the app to handle
             window.dispatchEvent(new CustomEvent('resend-message', { detail: { content: text } }));
+        };
+
+        // Edit user message
+        window.editMessage = function (index) {
+            window.dispatchEvent(new CustomEvent('edit-message', { detail: { index } }));
+        };
+
+        // Save edited message
+        window.saveEditMessage = function (index) {
+            window.dispatchEvent(new CustomEvent('save-edit-message', { detail: { index } }));
+        };
+
+        // Cancel edit
+        window.cancelEditMessage = function (index) {
+            window.dispatchEvent(new CustomEvent('cancel-edit-message', { detail: { index } }));
+        };
+
+        // Regenerate from here
+        window.regenerateFromHere = function (index) {
+            window.dispatchEvent(new CustomEvent('regenerate-from-here', { detail: { index } }));
         };
     </script>
 

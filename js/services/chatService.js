@@ -222,6 +222,35 @@ class ChatService {
     }
 
     /**
+     * Truncate messages from a given index onwards (inclusive)
+     * Used for "regenerate from here" and "edit + resend"
+     * @param {number} fromIndex - Index to truncate from
+     */
+    truncateFromMessage(fromIndex) {
+        const chat = this.getCurrentChat();
+        if (chat && fromIndex >= 0 && fromIndex < chat.messages.length) {
+            chat.messages = chat.messages.slice(0, fromIndex);
+            chat.updatedAt = new Date().toISOString();
+            this.save();
+            eventBus.emit(Events.CHAT_UPDATED, { id: this.currentChatId, chat });
+        }
+    }
+
+    /**
+     * Update message content at a specific index
+     * @param {number} index - Message index
+     * @param {string} content - New content
+     */
+    updateMessage(index, content) {
+        const chat = this.getCurrentChat();
+        if (chat && index >= 0 && index < chat.messages.length) {
+            chat.messages[index].content = content;
+            chat.updatedAt = new Date().toISOString();
+            this.save();
+        }
+    }
+
+    /**
      * Delete a chat
      * @param {string} chatId - Chat ID to delete
      */

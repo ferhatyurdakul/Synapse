@@ -113,16 +113,88 @@ class ChatView {
 
         // Listen for resend message event from global handler
         window.addEventListener('resend-message', async (e) => {
-            // Delete last assistant message and regenerate
             const chat = chatService.getCurrentChat();
             if (chat && chat.messages.length > 0) {
-                // Remove last assistant message if exists
                 const lastMsg = chat.messages[chat.messages.length - 1];
                 if (lastMsg.role === 'assistant') {
                     chatService.deleteLastMessage();
                 }
             }
-            // Re-display chat (without adding user message again) and stream new response
+            this.displayChat(chatService.getCurrentChat());
+            await this.streamResponse();
+        });
+
+        // Edit user message
+        window.addEventListener('edit-message', (e) => {
+            const { index } = e.detail;
+            const chat = chatService.getCurrentChat();
+            if (!chat || index < 0 || index >= chat.messages.length) return;
+
+            const msgEl = document.querySelector(`.message[data-index="${index}"]`);
+            if (!msgEl) return;
+
+            const contentEl = msgEl.querySelector('.message-content');
+            const originalContent = chat.messages[index].content;
+
+            msgEl.classList.add('editing');
+            contentEl.innerHTML = `
+                <textarea class="message-edit-area">${this.escapeHtml(originalContent)}</textarea>
+                <div class="edit-actions">
+                    <button class="edit-save-btn" onclick="saveEditMessage(${index})">
+                        <i data-lucide="check" class="icon"></i> Save & Submit
+                    </button>
+                    <button class="edit-cancel-btn" onclick="cancelEditMessage(${index})">
+                        <i data-lucide="x" class="icon"></i> Cancel
+                    </button>
+                </div>
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Focus textarea and move cursor to end
+            const textarea = contentEl.querySelector('.message-edit-area');
+            textarea.focus();
+            textarea.selectionStart = textarea.value.length;
+        });
+
+        // Save edited message
+        window.addEventListener('save-edit-message', async (e) => {
+            const { index } = e.detail;
+            const chat = chatService.getCurrentChat();
+            if (!chat) return;
+
+            const msgEl = document.querySelector(`.message[data-index="${index}"]`);
+            if (!msgEl) return;
+
+            const textarea = msgEl.querySelector('.message-edit-area');
+            const newContent = textarea.value.trim();
+            if (!newContent) return;
+
+            // Update the message and truncate everything after it
+            chatService.updateMessage(index, newContent);
+            chatService.truncateFromMessage(index + 1);
+
+            // Re-display and stream
+            this.displayChat(chatService.getCurrentChat());
+            await this.streamResponse();
+        });
+
+        // Cancel edit
+        window.addEventListener('cancel-edit-message', (e) => {
+            const { index } = e.detail;
+            // Simply re-render the chat to restore original content
+            this.displayChat(chatService.getCurrentChat());
+        });
+
+        // Regenerate from here
+        window.addEventListener('regenerate-from-here', async (e) => {
+            const { index } = e.detail;
+            const chat = chatService.getCurrentChat();
+            if (!chat) return;
+
+            // Truncate from this assistant message onwards
+            chatService.truncateFromMessage(index);
+
+            // Re-display and stream
             this.displayChat(chatService.getCurrentChat());
             await this.streamResponse();
         });
@@ -139,8 +211,7 @@ class ChatView {
         }
 
         chat.messages.forEach((msg, index) => {
-            const isLastUserMsg = msg.role === 'user' && index === chat.messages.length - 1;
-            this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, isLastUserMsg, msg.stats);
+            this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, index, msg.stats);
         });
 
         // Restore context meter data for this chat
@@ -332,7 +403,7 @@ class ChatView {
         return statsEl;
     }
 
-    appendMessage(role, content, thinking = '', animate = true, model = null, isLastUserMessage = false, stats = null) {
+    appendMessage(role, content, thinking = '', animate = true, model = null, msgIndex = -1, stats = null) {
         const container = document.getElementById('messages-container');
 
         // Remove welcome message if present
@@ -341,14 +412,11 @@ class ChatView {
             welcome.remove();
         }
 
-        // Remove resend button from previous user messages
-        if (role === 'user') {
-            const prevResendBtns = container.querySelectorAll('.resend-btn');
-            prevResendBtns.forEach(btn => btn.remove());
-        }
-
         const messageEl = document.createElement('div');
         messageEl.className = `message ${role}-message ${animate ? 'animate-in' : ''}`;
+        if (msgIndex >= 0) {
+            messageEl.dataset.index = msgIndex;
+        }
 
         const timestamp = new Date().toLocaleTimeString([], {
             hour: '2-digit',
@@ -360,12 +428,15 @@ class ChatView {
             ? '⟩ You'
             : `⟨ ${model || this.selectedModel || 'AI'}`;
 
-        // Build action buttons
-        let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message"><i data-lucide="copy" class="icon"></i></button>`;
+        // Build action buttons based on role
+        let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy"><i data-lucide="copy" class="icon"></i></button>`;
 
-        // Add resend button only for user messages (will be shown only on last one)
-        if (role === 'user') {
-            actionButtons += `<button class="message-action-btn resend-btn" onclick="resendMessage(this)" title="Resend message"><i data-lucide="refresh-cw" class="icon"></i></button>`;
+        if (role === 'user' && msgIndex >= 0) {
+            actionButtons += `<button class="message-action-btn edit-btn" onclick="editMessage(${msgIndex})" title="Edit message"><i data-lucide="pencil" class="icon"></i></button>`;
+        }
+
+        if (role === 'assistant' && msgIndex >= 0) {
+            actionButtons += `<button class="message-action-btn regenerate-btn" onclick="regenerateFromHere(${msgIndex})" title="Regenerate from here"><i data-lucide="rotate-cw" class="icon"></i></button>`;
         }
 
         messageEl.innerHTML = `
@@ -404,6 +475,12 @@ class ChatView {
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
         }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     createStreamingMessage() {

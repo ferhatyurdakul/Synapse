@@ -911,8 +911,87 @@ body::before {
     color: var(--success-color);
 }
 
-.message-action-btn.resend-btn:hover {
+.message-action-btn.resend-btn:hover,
+.message-action-btn.regenerate-btn:hover {
     color: var(--accent-yellow);
+}
+
+.message-action-btn.edit-btn:hover {
+    color: var(--accent-cyan);
+}
+
+/* Message Edit Mode */
+.message.editing {
+    border-color: var(--accent-cyan);
+}
+
+.message-edit-area {
+    width: 100%;
+    min-height: 80px;
+    max-height: 300px;
+    padding: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--font-sm);
+    line-height: 1.5;
+    resize: vertical;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.message-edit-area:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.edit-save-btn,
+.edit-cancel-btn {
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all var(--transition-fast);
+}
+
+.edit-save-btn {
+    background: rgba(0, 255, 255, 0.1);
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+.edit-save-btn:hover {
+    background: rgba(0, 255, 255, 0.2);
+}
+
+.edit-cancel-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+}
+
+.edit-cancel-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+
+.edit-save-btn .icon,
+.edit-cancel-btn .icon {
+    width: 12px;
+    height: 12px;
 }
 
 /* Code Block Container */
