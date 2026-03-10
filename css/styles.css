@@ -934,9 +934,9 @@ body::before {
     color: var(--text-primary);
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    font-family: var(--font-mono);
-    font-size: var(--font-sm);
-    line-height: 1.5;
+    font-family: var(--font-secondary);
+    font-size: var(--font-md);
+    line-height: 1.4;
     resize: vertical;
     box-sizing: border-box;
     outline: none;
