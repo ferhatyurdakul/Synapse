@@ -287,12 +287,7 @@ class ChatSidebar {
             }
         }
 
-        if (!this.selectedModel) {
-            console.warn('No model selected');
-            return;
-        }
-
-        chatService.createChat(this.selectedModel);
+        chatService.createChat(this.selectedModel || null);
     }
 
     refreshChatList() {
