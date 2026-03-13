@@ -7,6 +7,7 @@ import { chatService } from '../services/chatService.js?v=27';
 import { providerManager } from '../services/providerManager.js?v=27';
 import { eventBus, Events } from '../utils/eventBus.js?v=27';
 import { openSettings } from './settingsPanel.js?v=27';
+import { renderMarkdown } from '../utils/markdown.js?v=27';
 
 class ChatSidebar {
     constructor(containerId) {
@@ -29,6 +30,7 @@ class ChatSidebar {
 
     init() {
         this.render();
+        this.ensureExportModal();
         this.attachEvents();
         this.listenToEvents();
         this.refreshChatList();
@@ -244,7 +246,7 @@ class ChatSidebar {
 
         // Export button
         document.getElementById('export-btn').addEventListener('click', () => {
-            this.handleExport();
+            this.openExportModal();
         });
 
         // Delete all button
@@ -503,24 +505,232 @@ class ChatSidebar {
         e.target.value = '';
     }
 
-    handleExport() {
+    ensureExportModal() {
+        if (document.getElementById('export-modal')) return;
+
+        const modal = document.createElement('div');
+        modal.id = 'export-modal';
+        modal.className = 'settings-modal hidden';
+        modal.innerHTML = `
+            <div class="settings-overlay" id="export-overlay"></div>
+            <div class="settings-panel">
+                <div class="settings-header">
+                    <h2>Export / Import</h2>
+                    <button class="settings-close-btn" id="export-close-btn">×</button>
+                </div>
+                <div class="settings-content">
+                    <div class="settings-section">
+                        <h3>Export format</h3>
+                        <div class="settings-field">
+                            <label for="export-format-select">Format</label>
+                            <select id="export-format-select" class="settings-select">
+                                <option value="json">JSON</option>
+                                <option value="md">Markdown</option>
+                                <option value="html">HTML (rendered)</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="export-include-thinking" checked />
+                                Include thinking blocks
+                            </label>
+                        </div>
+                        <div class="settings-actions">
+                            <button id="export-download-btn" class="action-btn primary">Export current chat</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        document.getElementById('export-overlay').addEventListener('click', () => this.closeExportModal());
+        document.getElementById('export-close-btn').addEventListener('click', () => this.closeExportModal());
+        document.getElementById('export-download-btn').addEventListener('click', () => this.handleExportDownload());
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeExportModal();
+            }
+        });
+    }
+
+    openExportModal() {
         const currentChat = chatService.getCurrentChat();
-        if (!currentChat || currentChat.messages.length === 0) {
-            return;
+        if (!currentChat || currentChat.messages.length === 0) return;
+        document.getElementById('export-modal')?.classList.remove('hidden');
+    }
+
+    closeExportModal() {
+        document.getElementById('export-modal')?.classList.add('hidden');
+    }
+
+    buildChatMarkdown(chat, includeThinking = true) {
+        const lines = [];
+        const created = chat.createdAt ? new Date(chat.createdAt).toISOString() : '';
+        lines.push(`# ${chat.title || 'Chat'}`);
+        if (created) lines.push(`_Created: ${created}_`);
+        lines.push('');
+
+        for (const msg of chat.messages) {
+            const role = msg.role || 'unknown';
+            const headerRole = role === 'user' ? 'User' : (role === 'assistant' ? 'Assistant' : role);
+            lines.push(`## ${headerRole}`);
+
+            if (includeThinking && msg.thinking) {
+                lines.push('');
+                lines.push('```thinking');
+                lines.push(String(msg.thinking).trim());
+                lines.push('```');
+            }
+
+            lines.push('');
+            lines.push(String(msg.content || '').trim());
+            lines.push('');
         }
 
-        const json = chatService.exportChat(currentChat.id);
-        const blob = new Blob([json], { type: 'application/json' });
+        return lines.join('\n');
+    }
+
+    buildChatHtml(chat, includeThinking = true) {
+        const title = this.escapeHtml(chat.title || 'Chat Export');
+        const blocks = [];
+
+        for (const msg of chat.messages) {
+            const role = msg.role || 'unknown';
+            const who = role === 'user' ? 'You' : 'Assistant';
+            const contentHtml = renderMarkdown(String(msg.content || ''));
+
+            let thinkingHtml = '';
+            if (includeThinking && msg.thinking) {
+                thinkingHtml = `
+                    <details class="export-thinking">
+                      <summary>Thinking</summary>
+                      <pre>${this.escapeHtml(String(msg.thinking).trim())}</pre>
+                    </details>
+                `;
+            }
+
+            blocks.push(`
+                <div class="export-message export-${role}">
+                    <div class="export-meta">${this.escapeHtml(who)}</div>
+                    ${thinkingHtml}
+                    <div class="export-content">${contentHtml}</div>
+                </div>
+            `);
+        }
+
+        // Minimal standalone HTML with existing CSS variables fallback
+        return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:#0b1220; color:#e5e7eb; padding:24px;}
+    .export-container{max-width:900px; margin:0 auto;}
+    h1{color:#22d3ee; margin:0 0 16px 0;}
+    .export-message{border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:12px 14px; margin:12px 0; background:rgba(255,255,255,0.03)}
+    .export-meta{font-size:12px; opacity:0.8; margin-bottom:8px;}
+    .export-content :is(pre,code){background:rgba(0,0,0,0.35);}
+    .export-thinking summary{cursor:pointer; font-size:12px; opacity:0.85;}
+    .export-thinking pre{white-space:pre-wrap; background:rgba(0,0,0,0.35); padding:10px; border-radius:8px;}
+    a{color:#60a5fa}
+    @media print{body{background:#fff;color:#000} .export-message{border:1px solid #ddd; background:#fff} h1{color:#000} a{color:#000}}
+  </style>
+</head>
+<body>
+  <div class="export-container">
+    <h1>${title}</h1>
+    ${blocks.join('\n')}
+  </div>
+</body>
+</html>`;
+    }
+
+    downloadBlob(content, mimeType, filename) {
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
-        const title = currentChat.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-        a.download = `chat-${title}-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    handleExportDownload() {
+        const currentChat = chatService.getCurrentChat();
+        if (!currentChat || currentChat.messages.length === 0) return;
+
+        const format = document.getElementById('export-format-select')?.value || 'json';
+        const includeThinking = !!document.getElementById('export-include-thinking')?.checked;
+
+        const safeTitle = (currentChat.title || 'chat').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+        const date = new Date().toISOString().split('T')[0];
+
+        if (format === 'json') {
+            let jsonStr = chatService.exportChat(currentChat.id);
+
+            // Apply includeThinking toggle to JSON as well
+            if (!includeThinking) {
+                try {
+                    const data = JSON.parse(jsonStr);
+                    const chatId = Object.keys(data)[0];
+                    const chat = data[chatId];
+                    if (chat && Array.isArray(chat.messages)) {
+                        chat.messages = chat.messages.map(m => {
+                            const copy = { ...m };
+                            delete copy.thinking;
+                            return copy;
+                        });
+                    }
+                    jsonStr = JSON.stringify(data, null, 2);
+                } catch (e) {
+                    console.warn('Failed to strip thinking from JSON export:', e);
+                }
+            }
+
+            this.downloadBlob(jsonStr, 'application/json', `chat-${safeTitle}-${date}.json`);
+            this.closeExportModal();
+            return;
+        }
+
+        if (format === 'md') {
+            const md = this.buildChatMarkdown(currentChat, includeThinking);
+            this.downloadBlob(md, 'text/markdown', `chat-${safeTitle}-${date}.md`);
+            this.closeExportModal();
+            return;
+        }
+
+        const html = this.buildChatHtml(currentChat, includeThinking);
+
+        if (format === 'html') {
+            this.downloadBlob(html, 'text/html', `chat-${safeTitle}-${date}.html`);
+            this.closeExportModal();
+            return;
+        }
+
+        // PDF strategy: open a new window and trigger browser print-to-pdf
+        const w = window.open('', '_blank');
+        if (!w) {
+            console.warn('Popup blocked. Allow popups to export PDF.');
+            return;
+        }
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        // Give the browser a moment to render
+        setTimeout(() => {
+            w.print();
+        }, 250);
+        this.closeExportModal();
     }
 
     updateExportButtonState() {
