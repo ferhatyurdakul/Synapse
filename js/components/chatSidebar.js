@@ -519,7 +519,7 @@ class ChatSidebar {
                     <button class="settings-close-btn" id="export-close-btn">×</button>
                 </div>
                 <div class="settings-content">
-                    <div class="settings-section">
+                    <div class="settings-section" style="margin-bottom: 0;">
                         <h3>Export format</h3>
                         <div class="settings-field">
                             <label for="export-format-select">Format</label>
@@ -535,11 +535,10 @@ class ChatSidebar {
                                 Include thinking blocks
                             </label>
                         </div>
-                        <div class="settings-actions">
-                            <button id="export-download-btn" class="action-btn primary">Export current chat</button>
+                        <div class="settings-actions" style="margin-top: 24px;">
+                            <button id="export-download-btn" class="action-btn primary" style="width: 100%;">Export current chat</button>
                         </div>
                     </div>
-
                 </div>
             </div>
         `;
