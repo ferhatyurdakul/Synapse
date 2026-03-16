@@ -1,14 +1,16 @@
 /**
  * ContextService - Manages context window optimization
- * Uses actual token counts from Ollama to decide when to summarize
+ * Uses actual token counts from Ollama to decide when to summarize.
+ * Summarization always runs in the background — never blocks a response.
  */
 
-import { providerManager } from './providerManager.js?v=27';
+import { providerManager } from './providerManager.js?v=34';
+import { storageService } from './storageService.js?v=34';
 
-// Summarize when usage exceeds this fraction of max context
+// Summarize when token usage exceeds this fraction of max context
 const SUMMARIZE_THRESHOLD = 0.7;
 
-// Keep the last N messages verbatim (2 exchanges = 4 messages)
+// Keep the last N messages verbatim after the summary (2 exchanges = 4 messages)
 const KEEP_RECENT_COUNT = 4;
 
 const SUMMARIZE_PROMPT = `Summarize the following conversation concisely. Preserve:
@@ -17,13 +19,43 @@ const SUMMARIZE_PROMPT = `Summarize the following conversation concisely. Preser
 - Specific names, numbers, and values
 - The overall topic and direction of the conversation
 
-Be thorough but brief. Write in a neutral tone as a factual summary.`;
+Be thorough but brief. Write in a neutral tone as a factual summary. Output only the summary, no commentary.`;
+
+const EXTEND_SUMMARY_PROMPT = `You have a summary of a conversation and new messages that followed it. Produce a single updated summary that incorporates everything. Preserve all important facts, decisions, code, and context from both. Output only the updated summary, no commentary.`;
 
 class ContextService {
+    constructor() {
+        // AbortController for any in-progress background summarization
+        this._backgroundController = null;
+        this.defaultModel = 'gemma3:1b';
+    }
+
+    getSummarizationProvider() {
+        const settings = storageService.loadSettings();
+        return settings.summarizationProvider || 'ollama';
+    }
+
+    setSummarizationProvider(provider) {
+        const settings = storageService.loadSettings();
+        settings.summarizationProvider = provider;
+        storageService.saveSettings(settings);
+    }
+
+    getSummarizationModel() {
+        const settings = storageService.loadSettings();
+        return settings.summarizationModel || this.defaultModel;
+    }
+
+    setSummarizationModel(model) {
+        const settings = storageService.loadSettings();
+        settings.summarizationModel = model;
+        storageService.saveSettings(settings);
+    }
+
     /**
      * Check if summarization is needed based on actual token usage
-     * @param {Object} chat - Chat object with lastTokenCount
-     * @param {number} maxCtx - Maximum context length
+     * @param {Object} chat
+     * @param {number} maxCtx
      * @returns {boolean}
      */
     shouldSummarize(chat, maxCtx) {
@@ -34,32 +66,28 @@ class ContextService {
     }
 
     /**
-     * Prepare messages for API, applying summarization if needed
-     * @param {Object} chat - Full chat object
-     * @param {number} maxCtx - Maximum context length
-     * @returns {Promise<{messages: Array, summarized: boolean, summary: string|null, summarizedUpTo: number}>}
+     * Prepare messages for the API.
+     * Uses an existing cached summary if available — never generates one.
+     * @param {Object} chat
+     * @param {number} maxCtx
+     * @returns {{ messages: Array, summarized: boolean }}
      */
     async prepareMessages(chat, maxCtx) {
-        const messages = chat.messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        const messages = chat.messages.map(msg => {
+            // Tool messages are stored with role:'tool' but sent to the API as user messages
+            if (msg.role === 'tool') {
+                return {
+                    role: 'user',
+                    content: `[Tool: ${msg.toolName}]\n${msg.input}\n→ ${msg.content.replace(/\*\*/g, '')}`,
+                };
+            }
+            const mapped = { role: msg.role, content: msg.content };
+            if (msg.images && msg.images.length > 0) mapped.images = msg.images;
+            return mapped;
+        });
 
-        // Not enough messages or under threshold — send as-is
-        if (!this.shouldSummarize(chat, maxCtx)) {
-            return {
-                messages,
-                summarized: false,
-                summary: chat.summary || null,
-                summarizedUpTo: chat.summarizedUpTo || 0
-            };
-        }
-
-        // Determine split point: keep last KEEP_RECENT_COUNT messages
-        const splitIndex = messages.length - KEEP_RECENT_COUNT;
-
-        // Check if we already have a valid summary covering these messages
-        if (chat.summary && chat.summarizedUpTo >= splitIndex) {
+        // Use existing cached summary if it covers at least some history
+        if (chat.summary && chat.summarizedUpTo > 0) {
             const recentMessages = messages.slice(chat.summarizedUpTo);
             const summaryMessage = {
                 role: 'system',
@@ -67,60 +95,97 @@ class ContextService {
             };
             return {
                 messages: [summaryMessage, ...recentMessages],
-                summarized: true,
-                summary: chat.summary,
-                summarizedUpTo: chat.summarizedUpTo
+                summarized: true
             };
         }
 
-        // Need to generate a new summary
-        const messagesToSummarize = messages.slice(0, splitIndex);
-        const recentMessages = messages.slice(splitIndex);
+        // No summary yet — send all messages as-is
+        return { messages, summarized: false };
+    }
+
+    /**
+     * Run summarization in the background after a response completes.
+     * Aborts any previous in-progress summarization for this session.
+     * @param {Object} chat - Full chat object (snapshot at call time)
+     * @param {number} maxCtx
+     * @returns {Promise<{ summary: string, summarizedUpTo: number } | null>}
+     */
+    async summarizeInBackground(chat, maxCtx) {
+        if (!this.shouldSummarize(chat, maxCtx)) return null;
+
+        const splitIndex = chat.messages.length - KEEP_RECENT_COUNT;
+
+        // Already have a summary that covers this range
+        if (chat.summary && chat.summarizedUpTo >= splitIndex) return null;
+
+        // Cancel any previous background summarization
+        if (this._backgroundController) {
+            this._backgroundController.abort();
+        }
+        this._backgroundController = new AbortController();
+        const signal = this._backgroundController.signal;
+
+        const messages = chat.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            images: msg.images
+        }));
+
+        // If a previous summary exists, only process the new messages since then
+        const previousSummary = (chat.summary && chat.summarizedUpTo > 0) ? chat.summary : null;
+        const startIndex = previousSummary ? chat.summarizedUpTo : 0;
+        const messagesToSummarize = messages.slice(startIndex, splitIndex);
 
         try {
-            const summary = await this.summarizeMessages(messagesToSummarize, chat.model);
-            const summaryMessage = {
-                role: 'system',
-                content: `Previous conversation summary:\n${summary}`
-            };
-
-            return {
-                messages: [summaryMessage, ...recentMessages],
-                summarized: true,
-                summary,
-                summarizedUpTo: splitIndex
-            };
+            const summary = await this._summarize(messagesToSummarize, signal, previousSummary);
+            this._backgroundController = null;
+            return { summary, summarizedUpTo: splitIndex };
         } catch (error) {
-            console.error('Summarization failed, sending all messages:', error);
-            return {
-                messages,
-                summarized: false,
-                summary: chat.summary || null,
-                summarizedUpTo: chat.summarizedUpTo || 0
-            };
+            this._backgroundController = null;
+            if (error.name === 'AbortError') return null;
+            throw error;
         }
     }
 
     /**
-     * Summarize a set of messages using the model
-     * @param {Array<{role: string, content: string}>} messages
-     * @param {string} model
-     * @returns {Promise<string>} Summary text
+     * @private
      */
-    async summarizeMessages(messages, model) {
+    async _summarize(messages, signal, previousSummary = null) {
+        const settings = storageService.loadSettings();
+        const model = settings.summarizationModel || this.defaultModel;
+        const providerName = settings.summarizationProvider || 'ollama';
+        const provider = providerManager.getProviderByName(providerName) || providerManager.getProvider();
+
+        // Use the summarization model's actual context length so we never truncate
+        let numCtx = 8192; // safe fallback
+        try {
+            const info = await provider.getModelInfo(model);
+            if (info.contextLength > 0) numCtx = info.contextLength;
+        } catch {
+            // keep fallback
+        }
+
         const conversationText = messages.map(msg => {
             const prefix = msg.role === 'user' ? 'User' : 'Assistant';
-            return `${prefix}: ${msg.content}`;
+            const imageNote = msg.images?.length ? ` [${msg.images.length} image(s) attached]` : '';
+            return `${prefix}: ${msg.content}${imageNote}`;
         }).join('\n\n');
 
-        const result = await providerManager.getProvider().chat(
-            model,
-            [
+        const chatMessages = previousSummary
+            ? [
+                { role: 'system', content: EXTEND_SUMMARY_PROMPT },
+                { role: 'user', content: `Previous summary:\n${previousSummary}\n\nNew messages:\n${conversationText}` }
+              ]
+            : [
                 { role: 'system', content: SUMMARIZE_PROMPT },
                 { role: 'user', content: conversationText }
-            ],
-            () => { },
-            { options: { temperature: 0.3, num_ctx: 4096 } }
+              ];
+
+        const result = await provider.chat(
+            model,
+            chatMessages,
+            () => {},
+            { options: { temperature: 0.3, num_ctx: numCtx }, signal }
         );
 
         return result.content.trim();

@@ -3,9 +3,11 @@
  * Supports per-model parameter configuration with multi-provider support
  */
 
-import { titleService } from '../services/titleService.js?v=27';
-import { providerManager } from '../services/providerManager.js?v=27';
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
+import { titleService } from '../services/titleService.js?v=34';
+import { contextService } from '../services/contextService.js?v=34';
+import { providerManager } from '../services/providerManager.js?v=34';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
+import { toast } from './toast.js?v=34';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -30,6 +32,7 @@ class SettingsPanel {
         this.isOpen = false;
         this.models = [];
         this.titleModels = [];
+        this.summModels = [];
         this.selectedModel = null;
         this.modelContextMax = 131072;
         this.render();
@@ -49,8 +52,8 @@ class SettingsPanel {
             <div class="settings-overlay"></div>
             <div class="settings-panel">
                 <div class="settings-header">
-                    <h2>⚙️ Settings</h2>
-                    <button id="settings-close-btn" class="settings-close-btn">×</button>
+                    <h2><i data-lucide="settings" class="icon"></i> Settings</h2>
+                    <button id="settings-close-btn" class="settings-close-btn"><i data-lucide="x" class="icon"></i></button>
                 </div>
                 <div class="settings-content">
                     <div class="settings-section">
@@ -83,17 +86,34 @@ class SettingsPanel {
                     </div>
 
                     <div class="settings-section">
-                        <h3>Application Settings</h3>
-                        <p class="settings-description">General application configuration.</p>
+                        <h3>Title Generation</h3>
+                        <p class="settings-description">Model used to auto-generate chat titles after the first exchange.</p>
                         <div class="settings-field">
-                            <label for="title-provider-select">Title Generation Provider</label>
+                            <label for="title-provider-select">Provider</label>
                             <select id="title-provider-select" class="settings-select">
                                 ${providerOptions}
                             </select>
                         </div>
                         <div class="settings-field">
-                            <label for="title-model-select">Title Generation Model</label>
+                            <label for="title-model-select">Model</label>
                             <select id="title-model-select" class="settings-select">
+                                <option value="">Loading models...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Context Summarization</h3>
+                        <p class="settings-description">Model used to summarize conversation history when the context window fills up. A small, fast model works well here.</p>
+                        <div class="settings-field">
+                            <label for="summ-provider-select">Provider</label>
+                            <select id="summ-provider-select" class="settings-select">
+                                ${providerOptions}
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label for="summ-model-select">Model</label>
+                            <select id="summ-model-select" class="settings-select">
                                 <option value="">Loading models...</option>
                             </select>
                         </div>
@@ -105,6 +125,7 @@ class SettingsPanel {
             </div>
         `;
         document.body.appendChild(modal);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     renderSlider(param) {
@@ -142,6 +163,7 @@ class SettingsPanel {
 
         // Provider change for model params
         document.getElementById('param-provider-select').addEventListener('change', async (e) => {
+            this.updateTopKVisibility(e.target.value);
             await this.loadModelsForProvider(e.target.value, 'param-model-select');
             const model = document.getElementById('param-model-select').value;
             if (model) {
@@ -163,6 +185,11 @@ class SettingsPanel {
         // Title provider change
         document.getElementById('title-provider-select').addEventListener('change', async (e) => {
             await this.loadModelsForProvider(e.target.value, 'title-model-select');
+        });
+
+        // Summarization provider change
+        document.getElementById('summ-provider-select').addEventListener('change', async (e) => {
+            await this.loadModelsForProvider(e.target.value, 'summ-model-select');
         });
 
         // Slider value updates
@@ -188,10 +215,14 @@ class SettingsPanel {
         // Set param provider to current active provider
         const paramProviderSelect = document.getElementById('param-provider-select');
         paramProviderSelect.value = providerManager.getProviderName();
+        this.updateTopKVisibility(paramProviderSelect.value);
         await this.loadModelsForProvider(paramProviderSelect.value, 'param-model-select');
 
         // Load title provider/model
         await this.loadTitleSettings();
+
+        // Load summarization provider/model
+        await this.loadSummarizationSettings();
 
         this.loadCurrentSettings();
     }
@@ -211,8 +242,10 @@ class SettingsPanel {
 
             if (selectId === 'param-model-select') {
                 this.models = models;
-            } else {
+            } else if (selectId === 'title-model-select') {
                 this.titleModels = models;
+            } else {
+                this.summModels = models;
             }
 
             const options = models.map(model =>
@@ -244,6 +277,25 @@ class SettingsPanel {
         if (currentTitleModel && titleModelSelect.querySelector(`option[value="${currentTitleModel}"]`)) {
             titleModelSelect.value = currentTitleModel;
         }
+    }
+
+    async loadSummarizationSettings() {
+        const summProviderSelect = document.getElementById('summ-provider-select');
+        const summProvider = contextService.getSummarizationProvider();
+        summProviderSelect.value = summProvider;
+
+        await this.loadModelsForProvider(summProvider, 'summ-model-select');
+
+        const summModelSelect = document.getElementById('summ-model-select');
+        const currentSummModel = contextService.getSummarizationModel();
+        if (currentSummModel && summModelSelect.querySelector(`option[value="${currentSummModel}"]`)) {
+            summModelSelect.value = currentSummModel;
+        }
+    }
+
+    updateTopKVisibility(providerName) {
+        const topKField = document.querySelector('.slider-field[data-param="top_k"]');
+        if (topKField) topKField.style.display = providerName === 'lmstudio' ? 'none' : '';
     }
 
     async loadModelSettings(modelName, providerName) {
@@ -338,10 +390,23 @@ class SettingsPanel {
             titleService.setTitleProvider(selectedTitleProvider);
         }
 
+        // Save summarization provider + model
+        const summProviderSelect = document.getElementById('summ-provider-select');
+        const summSelect = document.getElementById('summ-model-select');
+        const selectedSummProvider = summProviderSelect.value;
+        const selectedSummModel = summSelect.value;
+        if (selectedSummModel) {
+            contextService.setSummarizationModel(selectedSummModel);
+            contextService.setSummarizationProvider(selectedSummProvider);
+        }
+
+        toast.success('Settings saved');
         this.close();
         eventBus.emit(Events.SETTINGS_UPDATED, {
             titleProvider: selectedTitleProvider,
             titleModel: selectedTitleModel,
+            summarizationProvider: selectedSummProvider,
+            summarizationModel: selectedSummModel,
             modelSettings: this.getAllModelSettings()
         });
     }

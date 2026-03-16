@@ -2,8 +2,8 @@
  * ThinkingBlock - Collapsible component for AI thinking/reasoning content
  */
 
-import { storageService } from '../services/storageService.js';
-import { renderMarkdown } from '../utils/markdown.js';
+import { storageService } from '../services/storageService.js?v=34';
+import { renderMarkdown } from '../utils/markdown.js?v=34';
 
 /**
  * Create a thinking block element
@@ -18,9 +18,8 @@ export function createThinkingBlock(content, collapsed = true) {
     const header = document.createElement('div');
     header.className = 'thinking-header';
     header.innerHTML = `
-        <span class="thinking-icon">💭</span>
         <span class="thinking-label">Thinking...</span>
-        <span class="thinking-toggle">${collapsed ? '▶' : '▼'}</span>
+        <span class="thinking-toggle"><i data-lucide="${collapsed ? 'chevron-right' : 'chevron-down'}" class="icon"></i></span>
     `;
 
     const body = document.createElement('div');
@@ -30,10 +29,20 @@ export function createThinkingBlock(content, collapsed = true) {
     wrapper.appendChild(header);
     wrapper.appendChild(body);
 
+    // Track whether the user has scrolled up within the thinking body
+    body._userScrolledUp = false;
+    body.addEventListener('scroll', () => {
+        const threshold = 40;
+        const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight <= threshold;
+        body._userScrolledUp = !atBottom;
+    });
+
     // Toggle handler
     header.addEventListener('click', () => {
         const isCollapsed = wrapper.classList.toggle('collapsed');
-        header.querySelector('.thinking-toggle').textContent = isCollapsed ? '▶' : '▼';
+        const toggle = header.querySelector('.thinking-toggle');
+        toggle.innerHTML = `<i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="icon"></i>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
 
         // Save preference
         const settings = storageService.loadSettings();
@@ -50,9 +59,15 @@ export function createThinkingBlock(content, collapsed = true) {
  * @param {string} content - New content
  */
 export function updateThinkingBlock(block, content) {
+    const body = block.querySelector('.thinking-body');
     const contentEl = block.querySelector('.thinking-content');
-    if (contentEl) {
-        contentEl.innerHTML = renderMarkdown(content);
+    if (!contentEl) return;
+
+    contentEl.innerHTML = renderMarkdown(content);
+
+    // Auto-scroll to bottom unless the user has scrolled up
+    if (body && !body._userScrolledUp) {
+        body.scrollTop = body.scrollHeight;
     }
 }
 

@@ -153,6 +153,11 @@ export function renderMarkdown(text) {
         html = fallbackRenderMarkdown(protectedText);
     }
 
+    // Sanitize before restoring LaTeX (LaTeX is our own content, not from the model)
+    if (typeof DOMPurify !== 'undefined') {
+        html = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    }
+
     // Restore LaTeX expressions
     latexPlaceholders.forEach(({ placeholder, original }) => {
         html = html.replace(placeholder, original);

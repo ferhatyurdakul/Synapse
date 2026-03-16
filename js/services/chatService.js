@@ -3,10 +3,10 @@
  * Coordinates between UI, Ollama service, and storage
  */
 
-import { storageService } from './storageService.js?v=27';
-import { contextService } from './contextService.js?v=27';
-import { providerManager } from './providerManager.js?v=27';
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
+import { storageService } from './storageService.js?v=34';
+import { contextService } from './contextService.js?v=34';
+import { providerManager } from './providerManager.js?v=34';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
 
 /**
  * Generate unique ID for chats
@@ -115,9 +115,10 @@ class ChatService {
      * @param {string} content - Message content
      * @param {string} thinking - Optional thinking content
      * @param {Object} stats - Optional message stats (tok/s, tokens, etc.)
+     * @param {Array<string>} images - Optional array of base64 data URL images
      * @returns {Object} The added message
      */
-    addMessage(role, content, thinking = '', stats = null) {
+    addMessage(role, content, thinking = '', stats = null, images = null) {
         if (!this.currentChatId) {
             throw new Error('No active chat');
         }
@@ -136,6 +137,11 @@ class ChatService {
             message.stats = stats;
         }
 
+        // Persist images for user messages
+        if (images && images.length > 0) {
+            message.images = images;
+        }
+
         chat.messages.push(message);
         chat.updatedAt = new Date().toISOString();
 
@@ -148,6 +154,43 @@ class ChatService {
         eventBus.emit(Events.CHAT_UPDATED, { id: this.currentChatId, chat });
 
         return message;
+    }
+
+    /**
+     * Add a tool result message to the current chat.
+     * @param {string} toolName - Name of the tool (e.g. 'calc')
+     * @param {string} input    - Arguments JSON string
+     * @param {string} result   - Markdown result string from the tool handler
+     * @returns {number} index of the added message
+     */
+    addToolMessage(toolName, input, result) {
+        return this.addToolMessageToChat(this.currentChatId, toolName, input, result);
+    }
+
+    /**
+     * Add a tool result message to a specific chat (for background streams).
+     * @param {string} chatId   - Chat ID
+     * @param {string} toolName - Name of the tool
+     * @param {string} input    - Arguments JSON string
+     * @param {string} result   - Markdown result string
+     * @returns {number} index of the added message
+     */
+    addToolMessageToChat(chatId, toolName, input, result) {
+        if (!chatId || !this.chats[chatId]) throw new Error('No active chat');
+        const chat = this.chats[chatId];
+        const message = {
+            id: generateId(),
+            role: 'tool',
+            toolName,
+            input,
+            content: result,
+            timestamp: new Date().toISOString(),
+        };
+        chat.messages.push(message);
+        chat.updatedAt = new Date().toISOString();
+        this.save();
+        eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat });
+        return chat.messages.length - 1;
     }
 
     /**
@@ -180,17 +223,24 @@ class ChatService {
 
         const result = await contextService.prepareMessages(chat, maxCtx);
 
-        // Store summary if generated
-        if (result.summary && result.summarizedUpTo > (chat.summarizedUpTo || 0)) {
-            chat.summary = result.summary;
-            chat.summarizedUpTo = result.summarizedUpTo;
-            this.save();
-        }
-
         return {
             messages: result.messages,
             summarized: result.summarized
         };
+    }
+
+    /**
+     * Store a background-generated summary on a chat
+     * @param {string} chatId
+     * @param {string} summary
+     * @param {number} summarizedUpTo - message index the summary covers up to
+     */
+    updateSummary(chatId, summary, summarizedUpTo) {
+        if (chatId && this.chats[chatId]) {
+            this.chats[chatId].summary = summary;
+            this.chats[chatId].summarizedUpTo = summarizedUpTo;
+            this.save();
+        }
     }
 
     /**
@@ -332,8 +382,17 @@ class ChatService {
      * @param {number} tokenCount - Actual token count from Ollama
      */
     updateTokenCount(tokenCount) {
-        if (this.currentChatId && this.chats[this.currentChatId]) {
-            this.chats[this.currentChatId].lastTokenCount = tokenCount;
+        this.updateTokenCountForChat(this.currentChatId, tokenCount);
+    }
+
+    /**
+     * Update last token count for a specific chat
+     * @param {string} chatId - Chat ID
+     * @param {number} tokenCount - Actual token count
+     */
+    updateTokenCountForChat(chatId, tokenCount) {
+        if (chatId && this.chats[chatId]) {
+            this.chats[chatId].lastTokenCount = tokenCount;
             this.save();
         }
     }
@@ -344,10 +403,74 @@ class ChatService {
      * @param {number} max - Max context tokens
      */
     updateContextData(used, max) {
-        if (this.currentChatId && this.chats[this.currentChatId]) {
-            this.chats[this.currentChatId].contextData = { used, max };
+        this.updateContextDataForChat(this.currentChatId, used, max);
+    }
+
+    /**
+     * Save context meter data for a specific chat
+     * @param {string} chatId - Chat ID
+     * @param {number} used - Tokens used
+     * @param {number} max - Max context tokens
+     */
+    updateContextDataForChat(chatId, used, max) {
+        if (chatId && this.chats[chatId]) {
+            this.chats[chatId].contextData = { used, max };
             this.save();
         }
+    }
+
+    /**
+     * Add a message to a specific chat (for background streams)
+     * @param {string} chatId - Chat ID to add message to
+     * @param {string} role - 'user' or 'assistant'
+     * @param {string} content - Message content
+     * @param {string} thinking - Optional thinking content
+     * @param {Object} stats - Optional message stats
+     * @param {Array<string>} images - Optional array of base64 data URL images
+     * @returns {Object} The added message
+     */
+    addMessageToChat(chatId, role, content, thinking = '', stats = null, images = null) {
+        if (!chatId || !this.chats[chatId]) {
+            throw new Error('Chat not found: ' + chatId);
+        }
+
+        const chat = this.chats[chatId];
+        const message = {
+            id: generateId(),
+            role,
+            content,
+            thinking,
+            timestamp: new Date().toISOString()
+        };
+
+        if (stats && role === 'assistant') {
+            message.stats = stats;
+        }
+
+        if (images && images.length > 0) {
+            message.images = images;
+        }
+
+        chat.messages.push(message);
+        chat.updatedAt = new Date().toISOString();
+
+        if (chat.title === 'New Chat' && role === 'user') {
+            chat.title = generateTitle(content);
+        }
+
+        this.save();
+        eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat });
+
+        return message;
+    }
+
+    /**
+     * Get a chat by ID
+     * @param {string} chatId - Chat ID
+     * @returns {Object|null}
+     */
+    getChat(chatId) {
+        return this.chats[chatId] || null;
     }
 }
 

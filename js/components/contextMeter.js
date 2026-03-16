@@ -3,7 +3,7 @@
  * Shows used/max tokens with color-coded progress
  */
 
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
 
 class ContextMeter {
     constructor() {
@@ -22,7 +22,12 @@ class ContextMeter {
                 <div class="context-meter-fill" id="context-meter-fill"></div>
             </div>
             <span class="context-meter-text" id="context-meter-text">—</span>
+            <span class="context-meter-summarized-wrapper hidden" id="context-meter-summarized-wrapper">
+                <i data-lucide="scroll-text" class="icon context-meter-summarized-icon"></i>
+                <div class="context-summary-tooltip" id="context-summary-tooltip"></div>
+            </span>
         `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
 
         // Insert above the input area
         const inputContainer = document.getElementById('input-area-container');
@@ -33,7 +38,7 @@ class ContextMeter {
 
     attachEvents() {
         eventBus.on(Events.CONTEXT_UPDATED, (data) => {
-            this.update(data.used, data.max, data.summarized);
+            this.update(data.used, data.max, data.summarized, data.summaryText);
         });
 
         // Reset only on new chat creation (empty chat)
@@ -49,9 +54,10 @@ class ContextMeter {
         const text = document.getElementById('context-meter-text');
         if (fill) fill.style.width = '0%';
         if (text) text.textContent = '—';
+        document.getElementById('context-meter-summarized-wrapper')?.classList.add('hidden');
     }
 
-    update(used, max, summarized = false) {
+    update(used, max, summarized = false, summaryText = null) {
         this.used = used;
         this.max = max;
 
@@ -79,8 +85,12 @@ class ContextMeter {
 
         const usedStr = used.toLocaleString();
         const maxStr = max.toLocaleString();
-        const suffix = summarized ? ' · 📝 summarized' : '';
-        text.textContent = `${usedStr} / ${maxStr} tokens${suffix}`;
+        text.textContent = `${usedStr} / ${maxStr} tokens`;
+
+        const wrapper = document.getElementById('context-meter-summarized-wrapper');
+        const tooltip = document.getElementById('context-summary-tooltip');
+        if (wrapper) wrapper.classList.toggle('hidden', !summarized);
+        if (tooltip && summaryText) tooltip.textContent = summaryText;
     }
 }
 

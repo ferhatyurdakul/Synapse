@@ -3,14 +3,16 @@
  * Initializes and coordinates all components
  */
 
-import { createModelSelector } from './components/modelSelector.js?v=27';
-import { createChatSidebar } from './components/chatSidebar.js?v=27';
-import { createChatView } from './components/chatView.js?v=27';
-import { createInputArea } from './components/inputArea.js?v=27';
-import { createSettingsPanel } from './components/settingsPanel.js?v=27';
-import { createContextMeter } from './components/contextMeter.js?v=27';
-import { providerManager } from './services/providerManager.js?v=27';
-import { eventBus, Events } from './utils/eventBus.js?v=27';
+import { createModelSelector } from './components/modelSelector.js?v=34';
+import { createChatSidebar } from './components/chatSidebar.js?v=34';
+import { createChatView } from './components/chatView.js?v=34';
+import { createInputArea } from './components/inputArea.js?v=34';
+import { createSettingsPanel } from './components/settingsPanel.js?v=34';
+import { createContextMeter } from './components/contextMeter.js?v=34';
+import { providerManager } from './services/providerManager.js?v=34';
+import { eventBus, Events } from './utils/eventBus.js?v=34';
+import { toast } from './components/toast.js?v=34';
+import './tools/builtins.js?v=34'; // registers built-in tools into toolRegistry
 
 class App {
     constructor() {
@@ -18,6 +20,7 @@ class App {
         this.chatSidebar = null;
         this.chatView = null;
         this.inputArea = null;
+        this._providerOnline = null; // null = unknown (initial state)
     }
 
     async init() {
@@ -51,9 +54,17 @@ class App {
         if (isAvailable) {
             statusDot?.classList.remove('offline');
             if (statusText) statusText.textContent = `Connected to ${label}`;
+            if (this._providerOnline === false) {
+                toast.success(`Reconnected to ${label}`);
+            }
+            this._providerOnline = true;
         } else {
             statusDot?.classList.add('offline');
             if (statusText) statusText.textContent = `${label} not connected`;
+            if (this._providerOnline !== false) {
+                toast.warning(`${label} is not connected`);
+            }
+            this._providerOnline = false;
             console.warn(`${label} server is not available.`);
         }
     }
@@ -69,9 +80,15 @@ class App {
             }
         });
 
-        // Provider change - re-check connection
+        // Provider change - reset state so the next check always toasts if offline
         eventBus.on(Events.PROVIDER_CHANGED, () => {
+            this._providerOnline = null;
             this.checkProviderConnection();
+        });
+
+        // Storage quota exceeded
+        window.addEventListener('synapse:quotaExceeded', () => {
+            toast.error('Storage full. Export your chats and delete old ones to free space.');
         });
 
         // Keyboard shortcuts

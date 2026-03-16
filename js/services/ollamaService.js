@@ -11,6 +11,8 @@ class OllamaService {
         this.abortController = null;
         // Cache for models that don't support thinking mode
         this.noThinkingModels = new Set();
+        // Cache for models that don't support tool calling
+        this.noToolsModels = new Set();
         // Known models that support thinking mode
         this.knownThinkingModels = ['qwen3', 'qwq', 'deepseek-r1'];
     }
@@ -103,14 +105,47 @@ class OllamaService {
                 }
             }
 
+            // Detect vision capability:
+            // 1. Check families array for "clip" (LLaVA-style models)
+            // 2. Check model_info keys for vision/image entries (Qwen 3.5, etc.)
+            const families = data.details?.families || [];
+            let supportsVision = families.some(f => f.toLowerCase() === 'clip');
+
+            if (!supportsVision && data.model_info) {
+                supportsVision = Object.keys(data.model_info).some(k =>
+                    k.includes('.vision.') || k.endsWith('.image_token_id')
+                );
+            }
+
             return {
                 ...data,
-                contextLength
+                contextLength,
+                supportsVision
             };
         } catch (error) {
             console.error('Error fetching model info:', error);
-            return { contextLength: 131072 }; // Return max on error
+            return { contextLength: 131072, supportsVision: false }; // Return max on error
         }
+    }
+
+    /**
+     * Format messages for Ollama API, converting image data URLs to raw base64
+     * @param {Array} messages - Messages array
+     * @returns {Array} Formatted messages
+     */
+    formatMessagesWithImages(messages) {
+        return messages.map(msg => {
+            if (!msg.images || msg.images.length === 0) return msg;
+            return {
+                role: msg.role,
+                content: msg.content,
+                images: msg.images.map(img => {
+                    // Strip data URL prefix if present (Ollama expects raw base64)
+                    const base64Match = img.match(/^data:image\/[^;]+;base64,(.+)$/);
+                    return base64Match ? base64Match[1] : img;
+                })
+            };
+        });
     }
 
     /**
@@ -122,22 +157,36 @@ class OllamaService {
      * @returns {Promise<{content: string, thinking: string}>}
      */
     async chat(model, messages, onChunk, options = {}) {
-        // Cancel any ongoing request
-        this.abort();
-        this.abortController = new AbortController();
+        // If an external signal is provided, use it (for concurrent background streams)
+        const externalSignal = options.signal;
+        if (!externalSignal) {
+            // Cancel any ongoing request
+            this.abort();
+            this.abortController = new AbortController();
+        }
+        const signal = externalSignal || this.abortController.signal;
 
         // Check if model supports thinking (cached)
         const supportsThinking = this.modelSupportsThinking(model);
 
+        const formattedMessages = this.formatMessagesWithImages(messages);
+
+        const { signal: _sig, ...restOptions } = options;
         const requestBody = {
             model,
-            messages,
+            messages: formattedMessages,
             stream: true,
-            ...options
+            ...restOptions
         };
 
-        // Add think:true only if model is known to support it
-        if (supportsThinking) {
+        // Strip tools if model is known not to support them
+        if (this.noToolsModels.has(model.toLowerCase()) && requestBody.tools) {
+            delete requestBody.tools;
+        }
+
+        // Add think:true only if model is known to support it AND no tools are provided
+        // (tool calling + thinking can conflict in Ollama's template rendering)
+        if (supportsThinking && !requestBody.tools) {
             requestBody.think = true;
         }
 
@@ -148,14 +197,22 @@ class OllamaService {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(requestBody),
-                signal: this.abortController.signal
+                signal
             });
 
-            // If we get 400 and we tried thinking mode, retry without it
-            if (!response.ok && response.status === 400 && supportsThinking) {
-                console.log(`Model ${model} doesn't support thinking mode, retrying without it`);
-                this.markModelNoThinking(model);
-                return this.chat(model, messages, onChunk, options);
+            if (!response.ok && response.status === 400) {
+                // Retry without thinking mode if it was enabled
+                if (supportsThinking && requestBody.think) {
+                    console.log(`Model ${model} doesn't support thinking mode, retrying without it`);
+                    this.markModelNoThinking(model);
+                    return this.chat(model, messages, onChunk, options);
+                }
+                // Retry without tools if they were sent
+                if (requestBody.tools) {
+                    console.log(`Model ${model} doesn't support tool calling, retrying without tools`);
+                    this.noToolsModels.add(model.toLowerCase());
+                    return this.chat(model, messages, onChunk, options);
+                }
             }
 
             if (!response.ok) {
@@ -175,6 +232,7 @@ class OllamaService {
             let promptEvalDuration = 0;
             let totalDuration = 0;
             let doneReason = '';
+            let toolCalls = null;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -244,6 +302,11 @@ class OllamaService {
                             });
                         }
 
+                        // Capture tool_calls from any chunk (can appear before done)
+                        if (json.message?.tool_calls) {
+                            toolCalls = json.message.tool_calls;
+                        }
+
                         if (json.done) {
                             promptEvalCount = json.prompt_eval_count || 0;
                             evalCount = json.eval_count || 0;
@@ -251,6 +314,10 @@ class OllamaService {
                             promptEvalDuration = json.prompt_eval_duration || 0;
                             totalDuration = json.total_duration || 0;
                             doneReason = json.done_reason || 'stop';
+                            if (json.message?.tool_calls) {
+                                toolCalls = json.message.tool_calls;
+                            }
+                            console.debug('[Ollama] done chunk:', { doneReason, toolCalls, content: fullContent?.slice(0, 100) });
                             break;
                         }
                     } catch (parseError) {
@@ -259,7 +326,7 @@ class OllamaService {
                 }
             }
 
-            this.abortController = null;
+            if (!externalSignal) this.abortController = null;
 
             return {
                 content: fullContent,
@@ -269,7 +336,8 @@ class OllamaService {
                 evalDuration,
                 promptEvalDuration,
                 totalDuration,
-                doneReason
+                doneReason,
+                toolCalls: toolCalls || undefined
             };
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -323,6 +391,15 @@ class OllamaService {
             thinkingContent,
             isInThinking: currentInThinking
         };
+    }
+
+    /**
+     * No-op: Ollama loads models automatically on first use
+     * @param {string} modelName
+     * @returns {Promise<{status: string, loadTime: number}>}
+     */
+    async loadModel(modelName) {
+        return { status: 'loaded', loadTime: 0 };
     }
 
     /**

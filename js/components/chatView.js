@@ -2,13 +2,16 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=27';
-import { providerManager } from '../services/providerManager.js?v=27';
-import { titleService } from '../services/titleService.js?v=27';
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=27';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=27';
-import { getModelParams } from './settingsPanel.js?v=27';
+import { chatService } from '../services/chatService.js?v=34';
+import { contextService } from '../services/contextService.js?v=34';
+import { providerManager } from '../services/providerManager.js?v=34';
+import { titleService } from '../services/titleService.js?v=34';
+import { toolRegistry } from '../services/toolRegistry.js?v=34';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
+import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=34';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=34';
+import { getModelParams } from './settingsPanel.js?v=34';
+import { toast } from './toast.js?v=34';
 
 const PROMPT_EXAMPLES = [
     { icon: '💡', text: 'Explain quantum computing in simple terms' },
@@ -34,6 +37,7 @@ class ChatView {
         this.currentStreamEl = null;
         this.currentThinkingBlock = null;
         this.selectedModel = null;
+        this.activeStreams = new Map(); // chatId -> stream state
 
         this.init();
     }
@@ -41,6 +45,7 @@ class ChatView {
     init() {
         this.render();
         this.listenToEvents();
+        this.attachScrollTracker();
     }
 
     render() {
@@ -52,6 +57,19 @@ class ChatView {
             </div>
         `;
         this.attachPromptClickHandlers();
+    }
+
+    attachScrollTracker() {
+        const container = document.getElementById('messages-container');
+        this._userScrolledUp = false;
+        this._isProgrammaticScroll = false;
+
+        container.addEventListener('scroll', () => {
+            if (this._isProgrammaticScroll) return;
+            const threshold = 60;
+            const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+            this._userScrolledUp = !atBottom;
+        });
     }
 
     buildWelcomeScreen() {
@@ -101,13 +119,18 @@ class ChatView {
             this.displayChat(chat);
         });
 
-        eventBus.on(Events.MESSAGE_SENT, async ({ content }) => {
-            await this.handleUserMessage(content);
+        eventBus.on(Events.MESSAGE_SENT, async ({ content, images }) => {
+            await this.handleUserMessage(content, images);
         });
 
         eventBus.on(Events.STREAM_END, ({ aborted }) => {
             if (aborted) {
-                providerManager.getProvider().abort();
+                // Only abort the stream for the currently viewed chat
+                const currentId = chatService.getCurrentChatId();
+                const streamState = this.activeStreams.get(currentId);
+                if (streamState && streamState.abortController) {
+                    streamState.abortController.abort();
+                }
             }
         });
 
@@ -173,9 +196,12 @@ class ChatView {
             chatService.updateMessage(index, newContent);
             chatService.truncateFromMessage(index + 1);
 
-            // Re-display and stream
-            this.displayChat(chatService.getCurrentChat());
-            await this.streamResponse();
+            this.displayChat(chat);
+
+            // Only stream if the last remaining message is from the user
+            if (this.endsWithUserMessage(chat)) {
+                await this.streamResponse();
+            }
         });
 
         // Cancel edit
@@ -194,9 +220,12 @@ class ChatView {
             // Truncate from this assistant message onwards
             chatService.truncateFromMessage(index);
 
-            // Re-display and stream
-            this.displayChat(chatService.getCurrentChat());
-            await this.streamResponse();
+            this.displayChat(chat);
+
+            // Only stream if the last remaining message is from the user
+            if (this.endsWithUserMessage(chat)) {
+                await this.streamResponse();
+            }
         });
     }
 
@@ -207,11 +236,17 @@ class ChatView {
         if (!chat || chat.messages.length === 0) {
             container.innerHTML = this.buildWelcomeScreen();
             this.attachPromptClickHandlers();
+            // Notify input area about stream status for this chat
+            eventBus.emit(Events.STREAM_STATUS_CHANGED, { streaming: false });
             return;
         }
 
         chat.messages.forEach((msg, index) => {
-            this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, index, msg.stats);
+            if (msg.role === 'tool') {
+                this.appendToolMessage(msg, index);
+            } else {
+                this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, index, msg.stats, msg.images);
+            }
         });
 
         // Restore context meter data for this chat
@@ -219,8 +254,48 @@ class ChatView {
             eventBus.emit(Events.CONTEXT_UPDATED, {
                 used: chat.contextData.used,
                 max: chat.contextData.max,
-                model: chat.model
+                model: chat.model,
+                summarized: !!chat.summary,
+                summaryText: chat.summary || null
             });
+        }
+
+        // Check if this chat has an active background stream
+        const streamState = this.activeStreams.get(chat.id);
+        if (streamState && !streamState.completed) {
+            // Re-create streaming message DOM and wire it up
+            const { messageEl, contentEl } = this.createStreamingMessage();
+
+            // Restore thinking block if present
+            if (streamState.fullThinking) {
+                const thinkingBlock = createThinkingBlock(
+                    streamState.fullThinking,
+                    getDefaultCollapsedState()
+                );
+                if (!streamState.thinkingDone) {
+                    thinkingBlock.classList.add('thinking-active');
+                }
+                messageEl.insertBefore(thinkingBlock, contentEl);
+                streamState.thinkingBlock = thinkingBlock;
+            }
+
+            // Restore accumulated content
+            if (streamState.fullContent) {
+                contentEl.innerHTML = renderMarkdown(streamState.fullContent);
+                renderLatexInElement(contentEl);
+            }
+
+            // Update stream state references so onChunk writes to new DOM
+            streamState.messageEl = messageEl;
+            streamState.contentEl = contentEl;
+            this.currentStreamEl = contentEl;
+            this.currentThinkingBlock = streamState.thinkingBlock || null;
+
+            // Notify input area that this chat is streaming
+            eventBus.emit(Events.STREAM_STATUS_CHANGED, { streaming: true });
+        } else {
+            // No active stream for this chat
+            eventBus.emit(Events.STREAM_STATUS_CHANGED, { streaming: false });
         }
 
         // Initialize Lucide icons
@@ -228,10 +303,10 @@ class ChatView {
             lucide.createIcons();
         }
 
-        this.scrollToBottom();
+        this.scrollToBottom(true);
     }
 
-    async handleUserMessage(content) {
+    async handleUserMessage(content, images = null) {
         // Ensure we have a chat
         if (!chatService.getCurrentChat()) {
             if (!this.selectedModel) {
@@ -241,10 +316,10 @@ class ChatView {
             chatService.createChat(this.selectedModel);
         }
 
-        // Add user message
-        chatService.addMessage('user', content);
-        this.appendMessage('user', content);
-        this.scrollToBottom();
+        // Add user message with images
+        chatService.addMessage('user', content, '', null, images);
+        this.appendMessage('user', content, '', true, null, -1, null, images);
+        this.scrollToBottom(true);
 
         // Start streaming response
         await this.streamResponse();
@@ -254,74 +329,205 @@ class ChatView {
         const chat = chatService.getCurrentChat();
         if (!chat) return;
 
-        eventBus.emit(Events.STREAM_START, {});
+        // Capture the chat ID at invocation so background streams save to the right chat
+        const streamChatId = chat.id;
+        const streamProvider = providerManager.getProvider();
 
-        // Create placeholder for streaming response
+        // Create a dedicated AbortController for this stream
+        const abortController = new AbortController();
+
+        eventBus.emit(Events.STREAM_START, { chatId: streamChatId });
+
+        // Create placeholder for streaming response and scroll it into view
         const { messageEl, contentEl } = this.createStreamingMessage();
         this.currentStreamEl = contentEl;
         this.currentThinkingBlock = null;
+        this.scrollToBottom(true);
 
-        let fullContent = '';
-        let fullThinking = '';
+        // Register in activeStreams
+        const streamState = {
+            messageEl,
+            contentEl,
+            thinkingBlock: null,
+            fullContent: '',
+            fullThinking: '',
+            _thinkingBase: '', // thinking accumulated from previous tool-call iterations
+            thinkingDone: false,
+            completed: false,
+            abortController
+        };
+        this.activeStreams.set(streamChatId, streamState);
 
         try {
             // Get model parameters from settings (per-model)
             const modelParams = getModelParams(chat.model);
             const maxCtx = modelParams.num_ctx || 4096;
 
+            const isViewing = () => chatService.getCurrentChatId() === streamChatId;
+
             // Get messages with smart context management (may summarize)
-            contentEl.innerHTML = '<span class="summarizing-hint">Preparing context...</span>';
+            if (isViewing()) {
+                streamState.contentEl.innerHTML = '<span class="summarizing-hint"><span class="blink-dot">●</span> Preparing context...</span>';
+            }
             const prepared = await chatService.getMessagesForApi(maxCtx);
-            contentEl.innerHTML = '';
+            let apiMessages = prepared.messages;
 
-            const result = await providerManager.getProvider().chat(
-                chat.model,
-                prepared.messages,
-                (chunk) => {
-                    fullContent = chunk.fullContent;
-                    fullThinking = chunk.fullThinking;
+            if (isViewing()) {
+                streamState.contentEl.innerHTML = '<span class="waiting-hint"><span class="blink-dot">●</span> Waiting for model...</span>';
+            }
 
-                    // Update thinking block
-                    if (chunk.fullThinking) {
-                        if (!this.currentThinkingBlock) {
-                            this.currentThinkingBlock = createThinkingBlock(
-                                chunk.fullThinking,
-                                getDefaultCollapsedState()
-                            );
-                            messageEl.insertBefore(this.currentThinkingBlock, contentEl);
-                        } else {
-                            updateThinkingBlock(this.currentThinkingBlock, chunk.fullThinking);
+            const tools = toolRegistry.getSchemas();
+            const MAX_TOOL_ITERATIONS = 5;
+            let finalResult = null;
+
+            for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+                // Reset content for subsequent iterations, keep thinking block
+                if (iter > 0) {
+                    streamState.fullContent = '';
+                    // Carry forward accumulated thinking so iter N+1 appends, not replaces
+                    streamState._thinkingBase = streamState.fullThinking;
+                    // Ensure existing thinking block shows as completed (not blinking)
+                    if (streamState.thinkingBlock && !streamState.thinkingDone) {
+                        streamState.thinkingDone = true;
+                        streamState.thinkingBlock.classList.remove('thinking-active');
+                        const label = streamState.thinkingBlock.querySelector('.thinking-label');
+                        if (label) label.textContent = 'Thinking';
+                    }
+                }
+
+                let waitingCleared = false;
+
+                const result = await streamProvider.chat(
+                    chat.model,
+                    apiMessages,
+                    (chunk) => {
+                        // Always update stream state (even if viewing another chat)
+                        streamState.fullContent = chunk.fullContent;
+                        // Accumulate thinking across all iterations
+                        const totalThinking = streamState._thinkingBase + (chunk.fullThinking || '');
+                        streamState.fullThinking = totalThinking;
+
+                        // Only update DOM if user is viewing this chat
+                        if (!isViewing()) return;
+
+                        // Clear "Waiting for model..." on first chunk
+                        if (!waitingCleared) {
+                            streamState.contentEl.innerHTML = '';
+                            waitingCleared = true;
                         }
+
+                        // Update thinking block
+                        if (totalThinking) {
+                            if (!streamState.thinkingBlock) {
+                                streamState.thinkingBlock = createThinkingBlock(
+                                    totalThinking,
+                                    getDefaultCollapsedState()
+                                );
+                                streamState.messageEl.insertBefore(streamState.thinkingBlock, streamState.contentEl);
+                                this.currentThinkingBlock = streamState.thinkingBlock;
+                                if (typeof lucide !== 'undefined') lucide.createIcons();
+                            } else {
+                                updateThinkingBlock(streamState.thinkingBlock, totalThinking);
+                            }
+                            if (chunk.isThinking && !streamState.thinkingDone) {
+                                streamState.thinkingBlock.classList.add('thinking-active');
+                            }
+                        }
+
+                        // Remove blinking once thinking is done
+                        if (!chunk.isThinking && !streamState.thinkingDone && streamState.thinkingBlock) {
+                            streamState.thinkingDone = true;
+                            streamState.thinkingBlock.classList.remove('thinking-active');
+                            const label = streamState.thinkingBlock.querySelector('.thinking-label');
+                            if (label) label.textContent = 'Thinking';
+                        }
+
+                        // Update content
+                        if (chunk.fullContent) {
+                            streamState.contentEl.innerHTML = renderMarkdown(chunk.fullContent);
+                            renderLatexInElement(streamState.contentEl);
+                        }
+
+                        this.scrollToBottom();
+                    },
+                    { options: modelParams, tools, signal: abortController.signal }
+                );
+
+                finalResult = result;
+                console.debug('[Tools] iter', iter, 'content:', result.content?.slice(0, 80), 'toolCalls:', result.toolCalls);
+
+                // No tool calls → final response, done
+                if (!result.toolCalls || result.toolCalls.length === 0) break;
+
+                // Stop thinking block blinking before executing tools
+                if (streamState.thinkingBlock && !streamState.thinkingDone) {
+                    streamState.thinkingDone = true;
+                    streamState.thinkingBlock.classList.remove('thinking-active');
+                    const label = streamState.thinkingBlock.querySelector('.thinking-label');
+                    if (label) label.textContent = 'Thinking';
+                }
+
+                // Add the assistant's tool-call turn to context
+                apiMessages.push({
+                    role: 'assistant',
+                    content: streamState.fullContent || '',
+                    tool_calls: result.toolCalls
+                });
+
+                // Execute each tool silently and inject results into context
+                for (const toolCall of result.toolCalls) {
+                    const name = toolCall.function.name;
+                    let args;
+                    try {
+                        args = typeof toolCall.function.arguments === 'string'
+                            ? JSON.parse(toolCall.function.arguments)
+                            : (toolCall.function.arguments || {});
+                    } catch {
+                        args = {};
                     }
 
-                    // Update content
-                    if (chunk.fullContent) {
-                        contentEl.innerHTML = renderMarkdown(chunk.fullContent);
-                        // Re-render LaTeX after content update
-                        renderLatexInElement(contentEl);
+                    let toolResult;
+                    try {
+                        toolResult = await toolRegistry.execute(name, args);
+                    } catch (err) {
+                        toolResult = `Error: ${err.message}`;
                     }
 
-                    this.scrollToBottom();
-                },
-                { options: modelParams }
-            );
+                    apiMessages.push({
+                        role: 'tool',
+                        tool_call_id: toolCall.id || name,
+                        content: toolResult
+                    });
+                }
 
-            // Emit context usage data
-            const totalUsed = result.promptEvalCount + result.evalCount;
-            eventBus.emit(Events.CONTEXT_UPDATED, {
-                used: totalUsed,
-                max: maxCtx,
-                model: chat.model,
-                summarized: prepared.summarized
-            });
+                // Reset the existing placeholder for the model's follow-up response
+                if (isViewing()) {
+                    streamState.contentEl.innerHTML = '<span class="waiting-hint"><span class="blink-dot">●</span> Waiting for model...</span>';
+                    this.scrollToBottom(true);
+                }
+            }
 
-            // Persist context data for this chat
-            chatService.updateContextData(totalUsed, maxCtx);
+            const result = finalResult;
 
-            // Store actual token count for next summarization decision
-            chatService.updateTokenCount(totalUsed);
+            // Stream completed — persist to the correct chat
+            const totalUsed = (result.promptEvalCount || 0) + (result.evalCount || 0);
 
-            // Build stats object to persist
+            // Only update context/stats if we got a real result (not an aborted empty return)
+            if (totalUsed > 0) {
+                if (isViewing()) {
+                    eventBus.emit(Events.CONTEXT_UPDATED, {
+                        used: totalUsed,
+                        max: maxCtx,
+                        model: chat.model,
+                        summarized: prepared.summarized,
+                        summaryText: prepared.summarized ? chatService.getChat(streamChatId)?.summary : null
+                    });
+                }
+
+                chatService.updateContextDataForChat(streamChatId, totalUsed, maxCtx);
+                chatService.updateTokenCountForChat(streamChatId, totalUsed);
+            }
+
             const statsData = {
                 evalCount: result.evalCount,
                 evalDuration: result.evalDuration,
@@ -331,34 +537,51 @@ class ChatView {
                 doneReason: result.doneReason
             };
 
-            // Add message stats bar
-            const stats = this.buildMessageStats(result);
-            if (stats) {
-                messageEl.appendChild(stats);
+            // Add stats bar only if viewing this chat and we have stats
+            if (isViewing() && result.evalCount) {
+                const stats = this.buildMessageStats(result);
+                if (stats) {
+                    streamState.messageEl.appendChild(stats);
+                }
             }
 
-            // Save final message with stats
-            chatService.addMessage('assistant', fullContent, fullThinking, statsData);
+            // Save final message to the correct chat (skip if empty/aborted)
+            if (streamState.fullContent) {
+                chatService.addMessageToChat(streamChatId, 'assistant', streamState.fullContent, streamState.fullThinking, statsData);
 
-            // Generate title for new chats (after first exchange)
-            const updatedChat = chatService.getCurrentChat();
-            // Check if this is the first message exchange (user + assistant = 2 messages)
-            // Note: addMessage already sets a fallback title, so we generate AI title after first exchange
-            if (updatedChat && updatedChat.messages.length === 2) {
-                // Get the user's first message from the chat
-                const firstUserMessage = updatedChat.messages[0]?.content || '';
-                this.generateChatTitle(updatedChat, firstUserMessage, fullContent);
+                // Generate title after the first exchange (overrides the auto-truncated placeholder)
+                const updatedChat = chatService.getChat(streamChatId);
+                if (updatedChat && updatedChat.messages.length === 2) {
+                    const firstUserMsg = updatedChat.messages.find(m => m.role === 'user');
+                    if (firstUserMsg) {
+                        this.generateChatTitle(updatedChat, firstUserMsg.content, streamState.fullContent);
+                    }
+                }
+
+                // Trigger background summarization if context is getting full
+                this.maybeRunBackgroundSummarization(streamChatId, maxCtx);
             }
 
         } catch (error) {
-            console.error('Stream error:', error);
-            contentEl.innerHTML = `<span class="error-message">⚠ Error: ${error.message}</span>`;
-            eventBus.emit(Events.STREAM_ERROR, { error });
+            if (error.name === 'AbortError') {
+                console.log('Stream aborted for chat:', streamChatId);
+            } else {
+                console.error('Stream error:', error);
+                // Only show error in DOM if user is viewing this chat
+                if (chatService.getCurrentChatId() === streamChatId) {
+                    streamState.contentEl.innerHTML = `<span class="error-message"><i data-lucide="alert-triangle" class="icon"></i> Error: ${error.message}</span>`;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+                eventBus.emit(Events.STREAM_ERROR, { error, chatId: streamChatId });
+            }
         }
 
+        // Clean up
+        streamState.completed = true;
+        this.activeStreams.delete(streamChatId);
         this.currentStreamEl = null;
         this.currentThinkingBlock = null;
-        eventBus.emit(Events.STREAM_END, { aborted: false });
+        eventBus.emit(Events.STREAM_END, { aborted: false, chatId: streamChatId });
     }
     buildMessageStats(result) {
         if (!result || !result.evalCount) return null;
@@ -403,7 +626,7 @@ class ChatView {
         return statsEl;
     }
 
-    appendMessage(role, content, thinking = '', animate = true, model = null, msgIndex = -1, stats = null) {
+    appendMessage(role, content, thinking = '', animate = true, model = null, msgIndex = -1, stats = null, images = null) {
         const container = document.getElementById('messages-container');
 
         // Remove welcome message if present
@@ -417,11 +640,6 @@ class ChatView {
         if (msgIndex >= 0) {
             messageEl.dataset.index = msgIndex;
         }
-
-        const timestamp = new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
 
         // Determine role display text
         const roleDisplay = role === 'user'
@@ -439,14 +657,20 @@ class ChatView {
             actionButtons += `<button class="message-action-btn regenerate-btn" onclick="regenerateFromHere(${msgIndex})" title="Regenerate from here"><i data-lucide="rotate-cw" class="icon"></i></button>`;
         }
 
+        const imageHtml = images && images.length > 0
+            ? `<div class="message-images">${images.map(img =>
+                `<img src="${img}" alt="Attached image" class="message-image-thumb">`
+            ).join('')}</div>`
+            : '';
+
         messageEl.innerHTML = `
             <div class="message-header">
                 <span class="message-role">${roleDisplay}</span>
                 <div class="message-actions">
                     ${actionButtons}
                 </div>
-                <span class="message-time">${timestamp}</span>
             </div>
+            ${imageHtml}
             <div class="message-content">${renderMarkdown(content)}</div>
         `;
 
@@ -477,6 +701,30 @@ class ChatView {
         }
     }
 
+    appendToolMessage(msg, msgIndex) {
+        const container = document.getElementById('messages-container');
+        const welcome = container.querySelector('.welcome-message');
+        if (welcome) welcome.remove();
+
+        const el = document.createElement('div');
+        el.className = 'message tool-message';
+        if (msgIndex >= 0) el.dataset.index = msgIndex;
+
+        el.innerHTML = `
+            <div class="tool-message-header">
+                <i data-lucide="terminal" class="icon"></i>
+                <span class="tool-message-name">${this.escapeHtml(msg.toolName)}</span>
+                <code class="tool-message-input">${this.escapeHtml(msg.input)}</code>
+            </div>
+            <div class="tool-message-result ${msg.error ? 'tool-message-error' : ''}">
+                ${renderMarkdown(msg.content)}
+            </div>
+        `;
+
+        container.appendChild(el);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -495,11 +743,6 @@ class ChatView {
         const messageEl = document.createElement('div');
         messageEl.className = 'message assistant-message streaming';
 
-        const timestamp = new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
         const chat = chatService.getCurrentChat();
         const modelDisplay = (chat && chat.model) || this.selectedModel || 'AI';
 
@@ -509,7 +752,6 @@ class ChatView {
                 <div class="message-actions">
                     <button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message"><i data-lucide="copy" class="icon"></i></button>
                 </div>
-                <span class="message-time">${timestamp}</span>
             </div>
             <div class="message-content">
                 <span class="cursor-blink">▌</span>
@@ -543,9 +785,51 @@ class ChatView {
         }
     }
 
-    scrollToBottom() {
+    async maybeRunBackgroundSummarization(chatId, maxCtx) {
+        const chat = chatService.getChat(chatId);
+        if (!chat || !contextService.shouldSummarize(chat, maxCtx)) return;
+
+        const notice = toast.info('Summarizing conversation history...', { duration: 0 });
+
+        try {
+            const result = await contextService.summarizeInBackground(chat, maxCtx);
+            notice.dismiss();
+
+            if (result) {
+                chatService.updateSummary(chatId, result.summary, result.summarizedUpTo);
+                toast.success('Conversation history summarized');
+
+                // Update context meter immediately — show icon + tooltip text
+                const updatedChat = chatService.getChat(chatId);
+                if (updatedChat?.contextData) {
+                    eventBus.emit(Events.CONTEXT_UPDATED, {
+                        used: updatedChat.contextData.used,
+                        max: updatedChat.contextData.max,
+                        model: updatedChat.model,
+                        summarized: true,
+                        summaryText: result.summary
+                    });
+                }
+            }
+        } catch (error) {
+            notice.dismiss();
+            toast.error('Failed to summarize conversation history');
+            console.error('Background summarization failed:', error);
+        }
+    }
+
+    endsWithUserMessage(chat) {
+        const msgs = chat?.messages;
+        return msgs && msgs.length > 0 && msgs[msgs.length - 1].role === 'user';
+    }
+
+    scrollToBottom(force = false) {
+        if (!force && this._userScrolledUp) return;
         const container = document.getElementById('messages-container');
+        this._isProgrammaticScroll = true;
         container.scrollTop = container.scrollHeight;
+        requestAnimationFrame(() => { this._isProgrammaticScroll = false; });
+        if (force) this._userScrolledUp = false;
     }
 }
 

@@ -17,11 +17,9 @@ class StorageService {
             localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
         } catch (error) {
             console.error('Failed to save chats:', error);
-            // Handle quota exceeded
             if (error.name === 'QuotaExceededError') {
                 this.handleQuotaExceeded();
             }
-            throw error;
         }
     }
 
@@ -144,7 +142,8 @@ class StorageService {
      */
     handleQuotaExceeded() {
         console.warn('Storage quota exceeded. Consider exporting and clearing old chats.');
-        // Could implement automatic cleanup of oldest chats here
+        // Dispatch a custom event so UI layers (e.g. toast) can react without a hard import dependency
+        window.dispatchEvent(new CustomEvent('synapse:quotaExceeded'));
     }
 }
 

@@ -2,12 +2,20 @@
  * InputArea - User input component with send functionality
  */
 
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
+import { chatService } from '../services/chatService.js?v=34';
+import { toast } from './toast.js?v=34';
+
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB hard reject
+const MAX_IMAGE_PX = 1920;                // longest side after downscale
+const JPEG_QUALITY = 0.85;
 
 class InputArea {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.isStreaming = false;
+        this.supportsVision = false;
+        this.pendingImages = [];
 
         this.init();
     }
@@ -21,18 +29,23 @@ class InputArea {
     render() {
         this.container.innerHTML = `
             <div class="input-area">
+                <div id="image-preview-strip" class="image-preview-strip hidden"></div>
                 <div class="input-wrapper">
-                    <textarea 
-                        id="message-input" 
+                    <input type="file" id="image-file-input" accept="image/*" multiple class="hidden">
+                    <button id="attach-image-btn" class="attach-image-btn hidden" title="Attach image">
+                        <i data-lucide="image-plus" class="icon"></i>
+                    </button>
+                    <textarea
+                        id="message-input"
                         class="terminal-input"
                         placeholder="Enter your message..."
                         rows="1"
                     ></textarea>
                     <button id="send-btn" class="send-btn" title="Send message">
-                        <span class="send-icon">▶</span>
+                        <i data-lucide="arrow-up" class="icon"></i>
                     </button>
                     <button id="stop-btn" class="stop-btn hidden" title="Stop generation">
-                        <span class="stop-icon">■</span>
+                        <i data-lucide="square" class="icon"></i>
                     </button>
                 </div>
                 <div class="input-hint">
@@ -40,12 +53,19 @@ class InputArea {
                 </div>
             </div>
         `;
+
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
     }
 
     attachEvents() {
         const input = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
         const stopBtn = document.getElementById('stop-btn');
+        const attachBtn = document.getElementById('attach-image-btn');
+        const fileInput = document.getElementById('image-file-input');
 
         // Auto-resize textarea
         input.addEventListener('input', () => {
@@ -61,6 +81,20 @@ class InputArea {
             }
         });
 
+        // Clipboard paste for images
+        input.addEventListener('paste', (e) => {
+            if (!this.supportsVision) return;
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) this.addImageFile(file);
+                }
+            }
+        });
+
         // Send button click
         sendBtn.addEventListener('click', () => this.sendMessage());
 
@@ -68,19 +102,62 @@ class InputArea {
         stopBtn.addEventListener('click', () => {
             eventBus.emit(Events.STREAM_END, { aborted: true });
         });
+
+        // Attach image button
+        attachBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (!files) return;
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    this.addImageFile(file);
+                }
+            }
+            fileInput.value = '';
+        });
     }
 
     listenToEvents() {
-        eventBus.on(Events.STREAM_START, () => {
-            this.setStreaming(true);
+        eventBus.on(Events.STREAM_START, ({ chatId }) => {
+            // Only enter streaming mode if the stream is for the current chat
+            if (!chatId || chatId === chatService.getCurrentChatId()) {
+                this.setStreaming(true);
+            }
         });
 
-        eventBus.on(Events.STREAM_END, () => {
-            this.setStreaming(false);
+        eventBus.on(Events.STREAM_END, ({ chatId }) => {
+            // Only exit streaming mode if the ended stream is for the current chat
+            if (!chatId || chatId === chatService.getCurrentChatId()) {
+                this.setStreaming(false);
+            }
         });
 
-        eventBus.on(Events.STREAM_ERROR, () => {
-            this.setStreaming(false);
+        eventBus.on(Events.STREAM_ERROR, ({ chatId }) => {
+            if (!chatId || chatId === chatService.getCurrentChatId()) {
+                this.setStreaming(false);
+            }
+        });
+
+        // When switching chats, sync streaming state to the new chat
+        eventBus.on(Events.STREAM_STATUS_CHANGED, ({ streaming }) => {
+            this.setStreaming(streaming);
+        });
+
+        eventBus.on(Events.VISION_CAPABILITY_CHANGED, ({ supportsVision }) => {
+            this.supportsVision = supportsVision;
+            const attachBtn = document.getElementById('attach-image-btn');
+            if (attachBtn) {
+                if (supportsVision) {
+                    attachBtn.classList.remove('hidden');
+                } else {
+                    attachBtn.classList.add('hidden');
+                    this.clearPendingImages();
+                }
+            }
         });
     }
 
@@ -88,14 +165,96 @@ class InputArea {
         const input = document.getElementById('message-input');
         const message = input.value.trim();
 
-        if (!message || this.isStreaming) return;
+        if (!message && this.pendingImages.length === 0) return;
+        if (this.isStreaming) return;
 
-        eventBus.emit(Events.MESSAGE_SENT, { content: message });
+        const payload = { content: message || '' };
+        if (this.pendingImages.length > 0) {
+            payload.images = [...this.pendingImages];
+        }
 
-        // Clear input
+        eventBus.emit(Events.MESSAGE_SENT, payload);
+
+        // Clear input and images
         input.value = '';
         input.style.height = 'auto';
+        this.clearPendingImages();
         input.focus();
+    }
+
+    async addImageFile(file) {
+        if (file.size > MAX_IMAGE_BYTES) {
+            toast.error(`Image too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 20 MB.`);
+            return;
+        }
+        try {
+            const dataUrl = await this._resizeImage(file);
+            this.pendingImages.push(dataUrl);
+            this.renderImagePreviews();
+        } catch (err) {
+            console.error('Failed to process image:', err);
+            toast.error('Failed to process image.');
+        }
+    }
+
+    async _resizeImage(file) {
+        const bitmap = await createImageBitmap(file);
+        const { width, height } = bitmap;
+
+        let targetW = width;
+        let targetH = height;
+        if (width > MAX_IMAGE_PX || height > MAX_IMAGE_PX) {
+            const ratio = Math.min(MAX_IMAGE_PX / width, MAX_IMAGE_PX / height);
+            targetW = Math.round(width * ratio);
+            targetH = Math.round(height * ratio);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, targetW, targetH);
+        bitmap.close();
+
+        return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+    }
+
+    removeImage(index) {
+        this.pendingImages.splice(index, 1);
+        this.renderImagePreviews();
+    }
+
+    clearPendingImages() {
+        this.pendingImages = [];
+        this.renderImagePreviews();
+    }
+
+    renderImagePreviews() {
+        const strip = document.getElementById('image-preview-strip');
+        if (!strip) return;
+
+        if (this.pendingImages.length === 0) {
+            strip.classList.add('hidden');
+            strip.innerHTML = '';
+            return;
+        }
+
+        strip.classList.remove('hidden');
+        strip.innerHTML = this.pendingImages.map((img, i) => `
+            <div class="image-preview-item">
+                <img src="${img}" alt="Attached image ${i + 1}">
+                <button class="image-remove-btn" data-index="${i}" title="Remove image"><i data-lucide="x" class="icon"></i></button>
+            </div>
+        `).join('');
+
+        // Attach remove handlers
+        strip.querySelectorAll('.image-remove-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.index);
+                this.removeImage(idx);
+            });
+        });
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     setStreaming(isStreaming) {

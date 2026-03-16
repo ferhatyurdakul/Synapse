@@ -3,10 +3,10 @@
  * Acts as a single entry point for provider-related operations
  */
 
-import { ollamaService } from './ollamaService.js?v=27';
-import { lmStudioService } from './lmStudioService.js?v=27';
-import { storageService } from './storageService.js?v=27';
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
+import { ollamaService } from './ollamaService.js?v=34';
+import { lmStudioService } from './lmStudioService.js?v=34';
+import { storageService } from './storageService.js?v=34';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
 
 const PROVIDERS = {
     ollama: {
@@ -63,8 +63,9 @@ class ProviderManager {
             return;
         }
 
-        // Abort any ongoing request from current provider
+        // Abort any ongoing request from current provider and unblock the UI
         this.getProvider().abort();
+        eventBus.emit(Events.STREAM_END, { aborted: true });
 
         this.currentProvider = providerName;
 

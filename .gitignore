@@ -1,19 +1,42 @@
 # OS files
 .DS_Store
 Thumbs.db
+Desktop.ini
+._*
 
-# IDE files
+# IDE / Editor files
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+*.sublime-project
+*.sublime-workspace
 
-# Node modules (if added later)
+# Node (if added later)
 node_modules/
+package-lock.json
 
 # Logs
 *.log
+npm-debug.log*
 
-# Local config
+# Local config / secrets
 .env
-.env.local
+.env.*
+
+# AI assistant files
+.agent/
+.claude/
+CLAUDE.md
+REPORT.md
+
+# Build artifacts (if added later)
+dist/
+build/
+out/
+
+# Backup files
+*.bak
+*.orig
+*.tmp

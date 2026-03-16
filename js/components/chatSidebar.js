@@ -3,11 +3,12 @@
  * Handles chat list, new chat, import/export
  */
 
-import { chatService } from '../services/chatService.js?v=27';
-import { providerManager } from '../services/providerManager.js?v=27';
-import { eventBus, Events } from '../utils/eventBus.js?v=27';
-import { openSettings } from './settingsPanel.js?v=27';
-import { renderMarkdown } from '../utils/markdown.js?v=27';
+import { chatService } from '../services/chatService.js?v=34';
+import { providerManager } from '../services/providerManager.js?v=34';
+import { eventBus, Events } from '../utils/eventBus.js?v=34';
+import { openSettings } from './settingsPanel.js?v=34';
+import { renderMarkdown } from '../utils/markdown.js?v=34';
+import { toast } from './toast.js?v=34';
 
 class ChatSidebar {
     constructor(containerId) {
@@ -54,7 +55,7 @@ class ChatSidebar {
                 
                 <div class="sidebar-actions">
                     <button id="new-chat-btn" class="action-btn primary">
-                        <span>+</span> New Chat
+                        <i data-lucide="plus" class="icon"></i> New Chat
                     </button>
                 </div>
                 
@@ -62,7 +63,7 @@ class ChatSidebar {
                     <div class="search-wrapper">
                         <span class="search-icon"><i data-lucide="search" class="icon"></i></span>
                         <input type="text" id="chat-search-input" class="search-input" placeholder="Search chats...">
-                        <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">×</button>
+                        <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search"><i data-lucide="x" class="icon"></i></button>
                         <button id="filter-toggle-btn" class="filter-toggle-btn" title="Toggle filters">
                             <span class="filter-icon"><i data-lucide="filter" class="icon"></i></span>
                         </button>
@@ -135,6 +136,11 @@ class ChatSidebar {
     }
 
     attachEvents() {
+        // Close export modal on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') this.closeExportModal();
+        });
+
         // Sidebar toggle
         document.getElementById('sidebar-toggle-btn').addEventListener('click', () => {
             this.toggleSidebar();
@@ -416,13 +422,16 @@ class ChatSidebar {
             return `
                 <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}">
                     <div class="chat-item-content">
-                        <span class="chat-icon">💬</span>
+                        <span class="chat-icon"><i data-lucide="message-square" class="icon"></i></span>
                         <div class="chat-item-text">
                             <span class="chat-title">${title}</span>
                             ${snippetHtml}
                         </div>
                     </div>
-                    <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat">×</button>
+                    <div class="chat-item-actions">
+                        <button class="rename-chat-btn" data-id="${chat.id}" title="Rename chat"><i data-lucide="pencil" class="icon"></i></button>
+                        <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat"><i data-lucide="x" class="icon"></i></button>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -430,10 +439,18 @@ class ChatSidebar {
         // Attach click handlers
         listEl.querySelectorAll('.chat-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (!e.target.classList.contains('delete-chat-btn')) {
+                if (!e.target.closest('.chat-item-actions')) {
                     chatService.selectChat(item.dataset.id);
                     this.refreshChatList();
                 }
+            });
+        });
+
+        // Attach rename handlers
+        listEl.querySelectorAll('.rename-chat-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.startRename(btn.dataset.id);
             });
         });
 
@@ -441,9 +458,18 @@ class ChatSidebar {
         listEl.querySelectorAll('.delete-chat-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                chatService.deleteChat(btn.dataset.id);
+                const chatId = btn.dataset.id;
+                const chat = chatService.getAllChats().find(c => c.id === chatId);
+                const chatTitle = chat?.title || 'Untitled chat';
+                this.showConfirmDialog(
+                    'Delete Chat',
+                    `Delete "${this.escapeHtml(chatTitle)}"? This cannot be undone.`,
+                    () => chatService.deleteChat(chatId)
+                );
             });
         });
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     highlightMatch(text, query) {
@@ -495,8 +521,10 @@ class ChatSidebar {
         reader.onload = (event) => {
             try {
                 chatService.importChats(event.target.result);
+                toast.success(`Chats imported successfully`);
             } catch (error) {
                 console.error('Failed to import chats:', error.message);
+                toast.error(`Failed to import: ${error.message}`);
             }
         };
         reader.readAsText(file);
@@ -510,50 +538,44 @@ class ChatSidebar {
 
         const modal = document.createElement('div');
         modal.id = 'export-modal';
-        modal.className = 'settings-modal hidden';
+        modal.className = 'export-modal hidden';
         modal.innerHTML = `
-            <div class="settings-overlay" id="export-overlay"></div>
-            <div class="settings-panel">
-                <div class="settings-header">
-                    <h2>Export / Import</h2>
-                    <button class="settings-close-btn" id="export-close-btn">×</button>
+            <div class="export-overlay" id="export-overlay"></div>
+            <div class="export-panel">
+                <div class="export-header">
+                    <h2>Export Chat</h2>
+                    <button class="export-close-btn" id="export-close-btn"><i data-lucide="x" class="icon"></i></button>
                 </div>
-                <div class="settings-content">
-                    <div class="settings-section" style="margin-bottom: 0;">
-                        <h3>Export format</h3>
-                        <div class="settings-field">
-                            <label for="export-format-select">Format</label>
-                            <select id="export-format-select" class="settings-select">
-                                <option value="json">JSON</option>
-                                <option value="md">Markdown</option>
-                                <option value="html">HTML (rendered)</option>
-                            </select>
-                        </div>
-                        <div class="settings-field">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="export-include-thinking" checked />
-                                Include thinking blocks
-                            </label>
-                        </div>
-                        <div class="settings-actions" style="margin-top: 24px;">
-                            <button id="export-download-btn" class="action-btn primary" style="width: 100%;">Export current chat</button>
-                        </div>
+                <div class="export-body">
+                    <div class="export-field">
+                        <label for="export-format-select">Format</label>
+                        <select id="export-format-select" class="export-select">
+                            <option value="json">JSON</option>
+                            <option value="md">Markdown</option>
+                            <option value="html">HTML (rendered)</option>
+                        </select>
                     </div>
+                    <label class="export-toggle">
+                        <span class="export-toggle-label">Include thinking blocks</span>
+                        <input type="checkbox" id="export-include-thinking" checked />
+                        <span class="export-toggle-track"><span class="export-toggle-thumb"></span></span>
+                    </label>
+                </div>
+                <div class="export-footer">
+                    <button id="export-download-btn" class="export-btn">
+                        <i data-lucide="download" class="icon"></i> Export
+                    </button>
                 </div>
             </div>
         `;
 
         document.body.appendChild(modal);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
 
         document.getElementById('export-overlay').addEventListener('click', () => this.closeExportModal());
         document.getElementById('export-close-btn').addEventListener('click', () => this.closeExportModal());
         document.getElementById('export-download-btn').addEventListener('click', () => this.handleExportDownload());
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeExportModal();
-            }
-        });
     }
 
     openExportModal() {
@@ -697,6 +719,7 @@ class ChatSidebar {
 
             this.downloadBlob(jsonStr, 'application/json', `chat-${safeTitle}-${date}.json`);
             this.closeExportModal();
+            toast.success('Chat exported as JSON');
             return;
         }
 
@@ -704,32 +727,16 @@ class ChatSidebar {
             const md = this.buildChatMarkdown(currentChat, includeThinking);
             this.downloadBlob(md, 'text/markdown', `chat-${safeTitle}-${date}.md`);
             this.closeExportModal();
+            toast.success('Chat exported as Markdown');
             return;
         }
-
-        const html = this.buildChatHtml(currentChat, includeThinking);
 
         if (format === 'html') {
+            const html = this.buildChatHtml(currentChat, includeThinking);
             this.downloadBlob(html, 'text/html', `chat-${safeTitle}-${date}.html`);
             this.closeExportModal();
-            return;
+            toast.success('Chat exported as HTML');
         }
-
-        // PDF strategy: open a new window and trigger browser print-to-pdf
-        const w = window.open('', '_blank');
-        if (!w) {
-            console.warn('Popup blocked. Allow popups to export PDF.');
-            return;
-        }
-        w.document.open();
-        w.document.write(html);
-        w.document.close();
-        w.focus();
-        // Give the browser a moment to render
-        setTimeout(() => {
-            w.print();
-        }, 250);
-        this.closeExportModal();
     }
 
     updateExportButtonState() {
@@ -747,9 +754,102 @@ class ChatSidebar {
             return;
         }
 
-        chatService.deleteAllChats();
-        this.refreshChatList();
-        this.updateExportButtonState();
+        this.showConfirmDialog(
+            'Delete All Chats',
+            `Are you sure you want to delete all ${chats.length} chat${chats.length > 1 ? 's' : ''}? This action cannot be undone.`,
+            () => {
+                chatService.deleteAllChats();
+                this.refreshChatList();
+                this.updateExportButtonState();
+            }
+        );
+    }
+
+    showConfirmDialog(title, message, onConfirm) {
+        // Remove existing dialog if any
+        const existing = document.getElementById('confirm-dialog');
+        if (existing) existing.remove();
+
+        const dialog = document.createElement('div');
+        dialog.id = 'confirm-dialog';
+        dialog.className = 'confirm-dialog';
+        dialog.innerHTML = `
+            <div class="confirm-overlay"></div>
+            <div class="confirm-panel">
+                <h3 class="confirm-title">${title}</h3>
+                <p class="confirm-message">${message}</p>
+                <div class="confirm-actions">
+                    <button class="confirm-btn cancel">Cancel</button>
+                    <button class="confirm-btn danger">Delete</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(dialog);
+
+        const close = () => dialog.remove();
+
+        dialog.querySelector('.confirm-overlay').addEventListener('click', close);
+        dialog.querySelector('.confirm-btn.cancel').addEventListener('click', close);
+        dialog.querySelector('.confirm-btn.danger').addEventListener('click', () => {
+            close();
+            onConfirm();
+        });
+
+        // Escape key closes
+        const onKey = (e) => {
+            if (e.key === 'Escape') {
+                close();
+                document.removeEventListener('keydown', onKey);
+            }
+        };
+        document.addEventListener('keydown', onKey);
+
+        // Focus the cancel button by default (safe option)
+        dialog.querySelector('.confirm-btn.cancel').focus();
+    }
+
+    startRename(chatId) {
+        const item = document.querySelector(`.chat-item[data-id="${chatId}"]`);
+        if (!item) return;
+        const titleEl = item.querySelector('.chat-title');
+        if (!titleEl) return;
+
+        const currentTitle = chatService.getAllChats().find(c => c.id === chatId)?.title || '';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'chat-title-input';
+        input.value = currentTitle;
+        titleEl.replaceWith(input);
+        input.focus();
+        input.select();
+
+        let committed = false;
+
+        const commit = () => {
+            if (committed) return;
+            committed = true;
+            const newTitle = input.value.trim();
+            if (newTitle && newTitle !== currentTitle) {
+                chatService.updateChatTitle(chatId, newTitle);
+            } else {
+                this.refreshChatList();
+            }
+        };
+
+        const cancel = () => {
+            if (committed) return;
+            committed = true;
+            this.refreshChatList();
+        };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+        input.addEventListener('blur', commit);
+        input.addEventListener('click', (e) => e.stopPropagation());
     }
 
     escapeHtml(text) {

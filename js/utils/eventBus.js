@@ -17,12 +17,15 @@ class EventBus {
         if (!this.events[event]) {
             this.events[event] = [];
         }
+
+        // Skip duplicate registrations of the same function reference
+        if (this.events[event].includes(callback)) {
+            return () => this.off(event, callback);
+        }
+
         this.events[event].push(callback);
 
-        // Return unsubscribe function
-        return () => {
-            this.events[event] = this.events[event].filter(cb => cb !== callback);
-        };
+        return () => this.off(event, callback);
     }
 
     /**
@@ -55,11 +58,23 @@ class EventBus {
     }
 
     /**
-     * Remove all listeners for an event
+     * Remove a specific listener, or all listeners for an event if no callback given
      * @param {string} event - Event name
+     * @param {Function} [callback] - Handler to remove; omit to remove all for this event
      */
-    off(event) {
-        delete this.events[event];
+    off(event, callback) {
+        if (!callback) {
+            delete this.events[event];
+        } else if (this.events[event]) {
+            this.events[event] = this.events[event].filter(cb => cb !== callback);
+        }
+    }
+
+    /**
+     * Remove all listeners for all events
+     */
+    offAll() {
+        this.events = {};
     }
 }
 
@@ -74,6 +89,8 @@ export const Events = {
     // Model events
     MODEL_CHANGED: 'model:changed',
     MODELS_LOADED: 'models:loaded',
+    MODEL_LOADING: 'model:loading',
+    MODEL_LOADED: 'model:loaded',
 
     // Chat events
     CHAT_CREATED: 'chat:created',
@@ -102,5 +119,14 @@ export const Events = {
     SETTINGS_UPDATED: 'settings:updated',
 
     // Context events
-    CONTEXT_UPDATED: 'context:updated'
+    CONTEXT_UPDATED: 'context:updated',
+
+    // Vision events
+    VISION_CAPABILITY_CHANGED: 'vision:capabilityChanged',
+
+    // Active stream query (emitted on chat switch for inputArea to check)
+    STREAM_STATUS_CHANGED: 'stream:statusChanged',
+
+    // Tool events
+    TOOL_RESULT: 'tool:result'
 };
