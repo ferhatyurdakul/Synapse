@@ -67,6 +67,7 @@ class ChatSidebar {
                         <button id="filter-toggle-btn" class="filter-toggle-btn" title="Toggle filters">
                             <span class="filter-icon"><i data-lucide="filter" class="icon"></i></span>
                         </button>
+                        <button id="filter-clear-btn" class="filter-clear-btn hidden" title="Clear filters"><i data-lucide="x" class="icon"></i></button>
                     </div>
                     <div id="filter-panel" class="filter-panel hidden">
                         <div class="filter-flags">
@@ -98,15 +99,15 @@ class ChatSidebar {
                                 <option value="month">This month</option>
                             </select>
                         </div>
-                        <div class="filter-field full-width filter-actions">
-                            <button id="filter-clear-btn" class="filter-clear-btn">Clear filters</button>
-                        </div>
                     </div>
                 </div>
 
                 <div class="sidebar-section">
                     <div class="section-header">
                         <span>HISTORY</span>
+                        <button id="add-folder-btn" class="section-header-btn" title="New folder">
+                            <i data-lucide="folder-plus" class="icon"></i>
+                        </button>
                     </div>
                     <div id="chat-list" class="chat-list">
                         <!-- Chat items will be rendered here -->
@@ -149,6 +150,11 @@ class ChatSidebar {
         // New chat button
         document.getElementById('new-chat-btn').addEventListener('click', () => {
             this.createNewChat();
+        });
+
+        // New folder button
+        document.getElementById('add-folder-btn').addEventListener('click', () => {
+            this.createNewFolder();
         });
 
         // Search input
@@ -328,7 +334,7 @@ class ChatSidebar {
         const currentId = chatService.getCurrentChatId();
         const query = this.searchQuery.toLowerCase();
 
-        // Apply filters first
+        // Apply filters
         if (this.filters.provider) {
             chats = chats.filter(c => (c.provider || '').toLowerCase() === this.filters.provider.toLowerCase());
         }
@@ -339,34 +345,19 @@ class ChatSidebar {
             const range = this.filters.dateRange || this.filters.date;
             const now = new Date();
             let cutoff;
-            if (range === 'today') {
-                cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            } else if (range === 'week') {
-                cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            } else if (range === 'month') {
-                cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            }
-            if (cutoff) {
-                chats = chats.filter(c => new Date(c.updatedAt || c.createdAt) >= cutoff);
-            }
+            if (range === 'today') cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            else if (range === 'week') cutoff = new Date(now.getTime() - 7 * 86400000);
+            else if (range === 'month') cutoff = new Date(now.getTime() - 30 * 86400000);
+            if (cutoff) chats = chats.filter(c => new Date(c.updatedAt || c.createdAt) >= cutoff);
         }
-
-        // Apply content flag filters
         if (this.filters.containsCode) {
-            chats = chats.filter(chat => {
-                return chat.messages.some(msg => msg.content && msg.content.includes('```'));
-            });
+            chats = chats.filter(chat => chat.messages.some(msg => msg.content && msg.content.includes('```')));
         }
         if (this.filters.containsMath) {
-            chats = chats.filter(chat => {
-                // Look for typical math delimiters: $...$, \[...\], \(...\)
-                return chat.messages.some(msg => {
-                    if (!msg.content) return false;
-                    return msg.content.includes('$') ||
-                        msg.content.includes('\\[') ||
-                        msg.content.includes('\\(');
-                });
-            });
+            chats = chats.filter(chat => chat.messages.some(msg => {
+                if (!msg.content) return false;
+                return msg.content.includes('$') || msg.content.includes('\\[') || msg.content.includes('\\(');
+            }));
         }
 
         // Text search
@@ -374,15 +365,12 @@ class ChatSidebar {
         if (query) {
             searchResults = new Map();
             chats = chats.filter(chat => {
-                // Match title
                 if (chat.title.toLowerCase().includes(query)) {
                     searchResults.set(chat.id, { type: 'title' });
                     return true;
                 }
-                // Match message content
                 for (const msg of chat.messages) {
                     if (msg.content && msg.content.toLowerCase().includes(query)) {
-                        // Get snippet around match
                         const idx = msg.content.toLowerCase().indexOf(query);
                         const start = Math.max(0, idx - 30);
                         const end = Math.min(msg.content.length, idx + query.length + 30);
@@ -404,49 +392,116 @@ class ChatSidebar {
             return;
         }
 
-        listEl.innerHTML = chats.map(chat => {
-            const title = query
-                ? this.highlightMatch(this.escapeHtml(chat.title), query)
-                : this.escapeHtml(chat.title);
+        // Group chats by folder
+        const folders = chatService.getAllFolders();
+        const folderChats = new Map(); // folderId -> chats[]
+        const unfolderedChats = [];
 
-            // Build snippet line for message matches
-            let snippetHtml = '';
-            if (searchResults && searchResults.has(chat.id)) {
-                const result = searchResults.get(chat.id);
-                if (result.type === 'message' && result.snippet) {
-                    const highlighted = this.highlightMatch(this.escapeHtml(result.snippet), query);
-                    snippetHtml = `<div class="chat-search-snippet">${highlighted}</div>`;
-                }
+        for (const chat of chats) {
+            if (chat.folderId && chatService.getFolder(chat.folderId)) {
+                if (!folderChats.has(chat.folderId)) folderChats.set(chat.folderId, []);
+                folderChats.get(chat.folderId).push(chat);
+            } else {
+                unfolderedChats.push(chat);
             }
+        }
 
-            return `
-                <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}">
-                    <div class="chat-item-content">
-                        <span class="chat-icon"><i data-lucide="message-square" class="icon"></i></span>
-                        <div class="chat-item-text">
-                            <span class="chat-title">${title}</span>
-                            ${snippetHtml}
+        // Build folder context menu options
+        const folderMenuOptions = folders.map(f =>
+            `<div class="folder-menu-item" data-folder-id="${f.id}">${this.escapeHtml(f.name)}</div>`
+        ).join('');
+
+        let html = '';
+
+        // Render folders (only those with matching chats, or all if no search)
+        for (const folder of folders) {
+            const fChats = folderChats.get(folder.id) || [];
+            // When searching, skip empty folders
+            if (query && fChats.length === 0) continue;
+
+            html += `
+                <div class="folder-group" data-folder-id="${folder.id}">
+                    <div class="folder-header ${folder.collapsed && !query ? 'collapsed' : ''}">
+                        <div class="folder-header-left">
+                            <i data-lucide="chevron-right" class="icon folder-chevron"></i>
+                            <i data-lucide="folder" class="icon folder-icon"></i>
+                            <span class="folder-name">${this.escapeHtml(folder.name)}</span>
+                            <span class="folder-count">${fChats.length}</span>
+                        </div>
+                        <div class="folder-actions">
+                            <button class="folder-action-btn rename-folder-btn" data-folder-id="${folder.id}" title="Rename folder"><i data-lucide="pencil" class="icon"></i></button>
+                            <button class="folder-action-btn delete-folder-btn" data-folder-id="${folder.id}" title="Delete folder"><i data-lucide="x" class="icon"></i></button>
                         </div>
                     </div>
-                    <div class="chat-item-actions">
-                        <button class="rename-chat-btn" data-id="${chat.id}" title="Rename chat"><i data-lucide="pencil" class="icon"></i></button>
-                        <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat"><i data-lucide="x" class="icon"></i></button>
+                    <div class="folder-contents ${folder.collapsed && !query ? 'hidden' : ''}">
+                        ${fChats.map(chat => this.renderChatItem(chat, currentId, query, searchResults, folderMenuOptions)).join('')}
                     </div>
                 </div>
             `;
-        }).join('');
+        }
 
-        // Attach click handlers
+        // Render unfoldered chats
+        html += unfolderedChats.map(chat => this.renderChatItem(chat, currentId, query, searchResults, folderMenuOptions)).join('');
+
+        listEl.innerHTML = html;
+        this.attachChatItemHandlers(listEl);
+        this.attachFolderHandlers(listEl);
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    renderChatItem(chat, currentId, query, searchResults, folderMenuOptions) {
+        const title = query
+            ? this.highlightMatch(this.escapeHtml(chat.title), query)
+            : this.escapeHtml(chat.title);
+
+        let snippetHtml = '';
+        if (searchResults && searchResults.has(chat.id)) {
+            const result = searchResults.get(chat.id);
+            if (result.type === 'message' && result.snippet) {
+                const highlighted = this.highlightMatch(this.escapeHtml(result.snippet), query);
+                snippetHtml = `<div class="chat-search-snippet">${highlighted}</div>`;
+            }
+        }
+
+        return `
+            <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}" draggable="true">
+                <div class="chat-item-content">
+                    <span class="chat-icon"><i data-lucide="message-square" class="icon"></i></span>
+                    <div class="chat-item-text">
+                        <span class="chat-title">${title}</span>
+                        ${snippetHtml}
+                    </div>
+                </div>
+                <div class="chat-item-actions">
+                    <button class="move-chat-btn" data-id="${chat.id}" title="Move to folder"><i data-lucide="folder-input" class="icon"></i></button>
+                    <button class="rename-chat-btn" data-id="${chat.id}" title="Rename chat"><i data-lucide="pencil" class="icon"></i></button>
+                    <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat"><i data-lucide="x" class="icon"></i></button>
+                </div>
+            </div>
+        `;
+    }
+
+    attachChatItemHandlers(listEl) {
+        // Click to select
         listEl.querySelectorAll('.chat-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (!e.target.closest('.chat-item-actions')) {
+                if (!e.target.closest('.chat-item-actions') && !e.target.closest('.folder-menu')) {
                     chatService.selectChat(item.dataset.id);
                     this.refreshChatList();
                 }
             });
+
+            // Drag support
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', item.dataset.id);
+                e.dataTransfer.effectAllowed = 'move';
+                item.classList.add('dragging');
+            });
+            item.addEventListener('dragend', () => item.classList.remove('dragging'));
         });
 
-        // Attach rename handlers
+        // Rename handlers
         listEl.querySelectorAll('.rename-chat-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -454,7 +509,7 @@ class ChatSidebar {
             });
         });
 
-        // Attach delete handlers
+        // Delete handlers
         listEl.querySelectorAll('.delete-chat-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -469,7 +524,84 @@ class ChatSidebar {
             });
         });
 
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        // Move-to-folder handlers
+        listEl.querySelectorAll('.move-chat-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showFolderMenu(btn.dataset.id, btn);
+            });
+        });
+    }
+
+    attachFolderHandlers(listEl) {
+        // Folder toggle
+        listEl.querySelectorAll('.folder-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('.folder-actions')) return;
+                const folderId = header.closest('.folder-group').dataset.folderId;
+                chatService.toggleFolderCollapsed(folderId);
+                header.classList.toggle('collapsed');
+                const contents = header.nextElementSibling;
+                contents.classList.toggle('hidden');
+            });
+        });
+
+        // Folder rename
+        listEl.querySelectorAll('.rename-folder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.startFolderRename(btn.dataset.folderId);
+            });
+        });
+
+        // Folder delete
+        listEl.querySelectorAll('.delete-folder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const folderId = btn.dataset.folderId;
+                const folder = chatService.getFolder(folderId);
+                this.showConfirmDialog(
+                    'Delete Folder',
+                    `Delete folder "${this.escapeHtml(folder?.name || '')}"? Chats inside will be moved to the root list.`,
+                    () => chatService.deleteFolder(folderId)
+                );
+            });
+        });
+
+        // Folder drop targets
+        listEl.querySelectorAll('.folder-group').forEach(group => {
+            const header = group.querySelector('.folder-header');
+            header.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                header.classList.add('drag-over');
+            });
+            header.addEventListener('dragleave', () => header.classList.remove('drag-over'));
+            header.addEventListener('drop', (e) => {
+                e.preventDefault();
+                header.classList.remove('drag-over');
+                const chatId = e.dataTransfer.getData('text/plain');
+                const folderId = group.dataset.folderId;
+                if (chatId) {
+                    chatService.moveChatToFolder(chatId, folderId);
+                }
+            });
+        });
+
+        // Root drop target (unfoldered area)
+        listEl.addEventListener('dragover', (e) => {
+            if (e.target.closest('.folder-group')) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+        listEl.addEventListener('drop', (e) => {
+            if (e.target.closest('.folder-group')) return;
+            e.preventDefault();
+            const chatId = e.dataTransfer.getData('text/plain');
+            if (chatId) {
+                chatService.moveChatToFolder(chatId, null);
+            }
+        });
     }
 
     highlightMatch(text, query) {
@@ -511,6 +643,7 @@ class ChatSidebar {
             this.filters.containsCode ||
             this.filters.containsMath;
         document.getElementById('filter-toggle-btn').classList.toggle('has-filters', !!hasActive);
+        document.getElementById('filter-clear-btn').classList.toggle('hidden', !hasActive);
     }
 
     handleImport(e) {
@@ -850,6 +983,106 @@ class ChatSidebar {
         });
         input.addEventListener('blur', commit);
         input.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    createNewFolder() {
+        const id = chatService.createFolder('New Folder');
+        // Immediately start rename on the new folder
+        requestAnimationFrame(() => this.startFolderRename(id));
+    }
+
+    startFolderRename(folderId) {
+        const group = document.querySelector(`.folder-group[data-folder-id="${folderId}"]`);
+        if (!group) return;
+        const nameEl = group.querySelector('.folder-name');
+        if (!nameEl) return;
+
+        const folder = chatService.getFolder(folderId);
+        const currentName = folder?.name || '';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'chat-title-input';
+        input.value = currentName;
+        nameEl.replaceWith(input);
+        input.focus();
+        input.select();
+
+        let committed = false;
+        const commit = () => {
+            if (committed) return;
+            committed = true;
+            const newName = input.value.trim();
+            if (newName && newName !== currentName) {
+                chatService.renameFolder(folderId, newName);
+            } else {
+                this.refreshChatList();
+            }
+        };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { e.preventDefault(); committed = true; this.refreshChatList(); }
+        });
+        input.addEventListener('blur', commit);
+        input.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    showFolderMenu(chatId, anchorEl) {
+        // Remove existing menu
+        document.querySelectorAll('.folder-menu').forEach(m => m.remove());
+
+        const folders = chatService.getAllFolders();
+        const chat = chatService.getChat(chatId);
+
+        const menu = document.createElement('div');
+        menu.className = 'folder-menu';
+
+        let items = '';
+        if (chat?.folderId) {
+            items += `<div class="folder-menu-item" data-folder-id="">
+                <i data-lucide="corner-left-up" class="icon"></i> Remove from folder
+            </div>`;
+        }
+        for (const f of folders) {
+            const active = chat?.folderId === f.id ? ' active' : '';
+            items += `<div class="folder-menu-item${active}" data-folder-id="${f.id}">
+                <i data-lucide="folder" class="icon"></i> ${this.escapeHtml(f.name)}
+            </div>`;
+        }
+        if (folders.length === 0) {
+            items += `<div class="folder-menu-empty">No folders yet</div>`;
+        }
+
+        menu.innerHTML = items;
+
+        // Position near the button
+        const rect = anchorEl.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.left = `${rect.left}px`;
+        menu.style.top = `${rect.bottom + 4}px`;
+        document.body.appendChild(menu);
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        // Click handler
+        menu.querySelectorAll('.folder-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const folderId = item.dataset.folderId || null;
+                chatService.moveChatToFolder(chatId, folderId);
+                menu.remove();
+            });
+        });
+
+        // Close on outside click
+        const close = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', close, true);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', close, true), 0);
     }
 
     escapeHtml(text) {

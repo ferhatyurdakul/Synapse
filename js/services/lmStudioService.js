@@ -8,6 +8,7 @@ const LMSTUDIO_BASE_URL = 'http://localhost:1234';
 class LMStudioService {
     constructor(baseUrl = LMSTUDIO_BASE_URL) {
         this.baseUrl = baseUrl;
+        this.defaultUrl = LMSTUDIO_BASE_URL;
         this.abortController = null;
         /** @type {Map<string, {state: string, type: string, maxContextLength: number}>} */
         this.modelCache = new Map();

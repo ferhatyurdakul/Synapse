@@ -86,6 +86,12 @@ class App {
             this.checkProviderConnection();
         });
 
+        // Settings updated (e.g. provider URLs changed) - re-check connection
+        eventBus.on(Events.SETTINGS_UPDATED, () => {
+            this._providerOnline = null;
+            this.checkProviderConnection();
+        });
+
         // Storage quota exceeded
         window.addEventListener('synapse:quotaExceeded', () => {
             toast.error('Storage full. Export your chats and delete old ones to free space.');

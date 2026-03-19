@@ -32,15 +32,17 @@ function generateTitle(content) {
 class ChatService {
     constructor() {
         this.chats = {};
+        this.folders = {};
         this.currentChatId = null;
         this.load();
     }
 
     /**
-     * Load chats from storage
+     * Load chats and folders from storage
      */
     load() {
         this.chats = storageService.loadChats();
+        this.folders = storageService.loadFolders();
     }
 
     /**
@@ -48,6 +50,10 @@ class ChatService {
      */
     save() {
         storageService.saveChats(this.chats);
+    }
+
+    saveFolders() {
+        storageService.saveFolders(this.folders);
     }
 
     /**
@@ -334,8 +340,10 @@ class ChatService {
      */
     deleteAllChats() {
         this.chats = {};
+        this.folders = {};
         this.currentChatId = null;
         this.save();
+        this.saveFolders();
         eventBus.emit(Events.CHAT_DELETED, { id: null, all: true });
     }
 
@@ -471,6 +479,72 @@ class ChatService {
      */
     getChat(chatId) {
         return this.chats[chatId] || null;
+    }
+
+    // ── Folder management ──
+
+    getAllFolders() {
+        return Object.values(this.folders).sort(
+            (a, b) => a.name.localeCompare(b.name)
+        );
+    }
+
+    getFolder(folderId) {
+        return this.folders[folderId] || null;
+    }
+
+    createFolder(name) {
+        const id = generateId();
+        this.folders[id] = {
+            id,
+            name,
+            collapsed: false,
+            createdAt: new Date().toISOString()
+        };
+        this.saveFolders();
+        eventBus.emit(Events.CHAT_UPDATED);
+        return id;
+    }
+
+    renameFolder(folderId, name) {
+        if (this.folders[folderId]) {
+            this.folders[folderId].name = name;
+            this.saveFolders();
+            eventBus.emit(Events.CHAT_UPDATED);
+        }
+    }
+
+    deleteFolder(folderId) {
+        if (!this.folders[folderId]) return;
+        // Unassign all chats in this folder
+        for (const chat of Object.values(this.chats)) {
+            if (chat.folderId === folderId) {
+                delete chat.folderId;
+            }
+        }
+        delete this.folders[folderId];
+        this.save();
+        this.saveFolders();
+        eventBus.emit(Events.CHAT_UPDATED);
+    }
+
+    toggleFolderCollapsed(folderId) {
+        if (this.folders[folderId]) {
+            this.folders[folderId].collapsed = !this.folders[folderId].collapsed;
+            this.saveFolders();
+        }
+    }
+
+    moveChatToFolder(chatId, folderId) {
+        if (!this.chats[chatId]) return;
+        if (folderId && !this.folders[folderId]) return;
+        if (folderId) {
+            this.chats[chatId].folderId = folderId;
+        } else {
+            delete this.chats[chatId].folderId;
+        }
+        this.save();
+        eventBus.emit(Events.CHAT_UPDATED);
     }
 }
 

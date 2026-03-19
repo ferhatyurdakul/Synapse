@@ -57,6 +57,24 @@ class SettingsPanel {
                 </div>
                 <div class="settings-content">
                     <div class="settings-section">
+                        <h3>Provider URLs</h3>
+                        <p class="settings-description">Base URLs for each provider. Change these if your LLM server runs on a different host or port.</p>
+                        ${providers.map(p => `
+                            <div class="settings-field">
+                                <label for="url-${p.name}">${p.label} URL</label>
+                                <div class="url-input-group">
+                                    <input type="text" id="url-${p.name}" class="settings-input provider-url-input"
+                                        placeholder="${providerManager.getDefaultUrl(p.name)}"
+                                        value="${providerManager.getProviderUrl(p.name)}">
+                                    <button class="url-test-btn" data-provider="${p.name}" title="Test connection">
+                                        <i data-lucide="wifi" class="icon"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="settings-section">
                         <h3>Model Parameters</h3>
                         <p class="settings-description">Configure parameters for each model. Settings are saved per-model.</p>
                         
@@ -161,6 +179,43 @@ class SettingsPanel {
             }
         });
 
+        // Test connection buttons
+        document.querySelectorAll('.url-test-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const name = btn.dataset.provider;
+                const input = document.getElementById(`url-${name}`);
+                const url = input.value.trim() || providerManager.getDefaultUrl(name);
+
+                btn.disabled = true;
+                const icon = btn.querySelector('.icon');
+                const origIcon = icon?.getAttribute('data-lucide');
+
+                try {
+                    const provider = providerManager.getProviderByName(name);
+                    const savedUrl = provider.baseUrl;
+                    provider.baseUrl = url.replace(/\/+$/, '');
+                    const ok = await provider.isServerAvailable();
+                    provider.baseUrl = savedUrl;
+
+                    if (ok) {
+                        toast.success(`${name === 'ollama' ? 'Ollama' : 'LM Studio'}: Connected`);
+                        if (icon) { icon.setAttribute('data-lucide', 'check'); lucide.createIcons(); }
+                    } else {
+                        toast.error(`${name === 'ollama' ? 'Ollama' : 'LM Studio'}: Not reachable`);
+                        if (icon) { icon.setAttribute('data-lucide', 'x'); lucide.createIcons(); }
+                    }
+                } catch {
+                    toast.error(`${name === 'ollama' ? 'Ollama' : 'LM Studio'}: Connection failed`);
+                    if (icon) { icon.setAttribute('data-lucide', 'x'); lucide.createIcons(); }
+                }
+
+                btn.disabled = false;
+                setTimeout(() => {
+                    if (icon) { icon.setAttribute('data-lucide', origIcon); lucide.createIcons(); }
+                }, 2000);
+            });
+        });
+
         // Provider change for model params
         document.getElementById('param-provider-select').addEventListener('change', async (e) => {
             this.updateTopKVisibility(e.target.value);
@@ -211,6 +266,12 @@ class SettingsPanel {
     async open() {
         this.isOpen = true;
         document.getElementById('settings-modal').classList.remove('hidden');
+
+        // Load current provider URLs
+        for (const p of providerManager.getAllProviders()) {
+            const input = document.getElementById(`url-${p.name}`);
+            if (input) input.value = providerManager.getProviderUrl(p.name);
+        }
 
         // Set param provider to current active provider
         const paramProviderSelect = document.getElementById('param-provider-select');
@@ -370,6 +431,16 @@ class SettingsPanel {
     }
 
     save() {
+        // Save provider URLs
+        const providers = providerManager.getAllProviders();
+        for (const p of providers) {
+            const input = document.getElementById(`url-${p.name}`);
+            if (input) {
+                const url = input.value.trim() || providerManager.getDefaultUrl(p.name);
+                providerManager.setProviderUrl(p.name, url);
+            }
+        }
+
         // Save model parameters
         if (this.selectedModel) {
             const settings = {};

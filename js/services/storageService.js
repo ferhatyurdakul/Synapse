@@ -6,6 +6,7 @@
 const STORAGE_PREFIX = 'synapse_';
 const CHATS_KEY = `${STORAGE_PREFIX}chats`;
 const SETTINGS_KEY = `${STORAGE_PREFIX}settings`;
+const FOLDERS_KEY = `${STORAGE_PREFIX}folders`;
 
 class StorageService {
     /**
@@ -78,6 +79,24 @@ class StorageService {
         };
     }
 
+    saveFolders(folders) {
+        try {
+            localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+        } catch (error) {
+            console.error('Failed to save folders:', error);
+        }
+    }
+
+    loadFolders() {
+        try {
+            const data = localStorage.getItem(FOLDERS_KEY);
+            return data ? JSON.parse(data) : {};
+        } catch (error) {
+            console.error('Failed to load folders:', error);
+            return {};
+        }
+    }
+
     /**
      * Export all chats as JSON string
      * @returns {string} JSON string of all chats
@@ -118,6 +137,7 @@ class StorageService {
     clearAll() {
         localStorage.removeItem(CHATS_KEY);
         localStorage.removeItem(SETTINGS_KEY);
+        localStorage.removeItem(FOLDERS_KEY);
     }
 
     /**

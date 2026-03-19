@@ -8,6 +8,7 @@ const OLLAMA_BASE_URL = 'http://localhost:11434';
 class OllamaService {
     constructor(baseUrl = OLLAMA_BASE_URL) {
         this.baseUrl = baseUrl;
+        this.defaultUrl = OLLAMA_BASE_URL;
         this.abortController = null;
         // Cache for models that don't support thinking mode
         this.noThinkingModels = new Set();

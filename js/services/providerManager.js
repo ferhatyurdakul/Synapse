@@ -27,6 +27,15 @@ class ProviderManager {
     constructor() {
         const settings = storageService.loadSettings();
         this.currentProvider = settings.selectedProvider || 'ollama';
+
+        // Apply saved provider URLs
+        if (settings.providerUrls) {
+            for (const [name, url] of Object.entries(settings.providerUrls)) {
+                if (PROVIDERS[name] && url) {
+                    PROVIDERS[name].service.baseUrl = url;
+                }
+            }
+        }
     }
 
     /**
@@ -87,6 +96,35 @@ class ProviderManager {
      */
     getProviderByName(providerName) {
         return PROVIDERS[providerName]?.service || null;
+    }
+
+    /**
+     * Get a provider's current base URL
+     */
+    getProviderUrl(providerName) {
+        return PROVIDERS[providerName]?.service.baseUrl || PROVIDERS[providerName]?.defaultUrl || '';
+    }
+
+    /**
+     * Get a provider's default base URL
+     */
+    getDefaultUrl(providerName) {
+        return PROVIDERS[providerName]?.defaultUrl || '';
+    }
+
+    /**
+     * Update a provider's base URL and persist it
+     */
+    setProviderUrl(providerName, url) {
+        if (!PROVIDERS[providerName]) return;
+        // Strip trailing slash
+        const cleaned = url.replace(/\/+$/, '');
+        PROVIDERS[providerName].service.baseUrl = cleaned;
+
+        const settings = storageService.loadSettings();
+        if (!settings.providerUrls) settings.providerUrls = {};
+        settings.providerUrls[providerName] = cleaned;
+        storageService.saveSettings(settings);
     }
 
     /**

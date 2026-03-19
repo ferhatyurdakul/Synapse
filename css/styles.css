@@ -177,7 +177,7 @@ body::before {
 }
 
 .title-icon {
-    color: var(--accent-green);
+    color: var(--accent-cyan);
     animation: blink 1s step-end infinite;
 }
 
@@ -425,30 +425,30 @@ body::before {
     color: var(--text-primary);
 }
 
-.filter-actions {
-    display: flex;
-    align-items: flex-end;
-    margin-top: auto;
-}
 
 .filter-clear-btn {
     background: none;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border: none;
     color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-size: var(--font-xs);
-    padding: 4px 6px;
     cursor: pointer;
-    white-space: nowrap;
-    width: 100%;
-    box-sizing: border-box;
-    transition: all var(--transition-fast);
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast);
+}
+
+.filter-clear-btn .icon {
+    width: 12px;
+    height: 12px;
 }
 
 .filter-clear-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--text-muted);
+    color: var(--error-color);
+}
+
+.filter-clear-btn.hidden {
+    display: none;
 }
 
 .filter-flags {
@@ -505,6 +505,9 @@ body::before {
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .chat-list {
@@ -634,6 +637,212 @@ body::before {
     width: 100%;
     min-width: 0;
     outline: none;
+}
+
+/* Folder styles */
+
+.section-header-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    display: flex;
+    align-items: center;
+    transition: color var(--transition-fast);
+}
+
+.section-header-btn:hover {
+    color: var(--accent-cyan);
+}
+
+.folder-group {
+    margin-bottom: 2px;
+}
+
+.folder-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 5px;
+    cursor: pointer;
+    border-radius: 2px;
+    user-select: none;
+    transition: background var(--transition-fast);
+}
+
+.folder-header:hover {
+    background: var(--bg-hover);
+}
+
+.folder-header.drag-over {
+    background: rgba(0, 212, 255, 0.1);
+    outline: 1px dashed var(--accent-cyan);
+}
+
+.folder-header-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+}
+
+.folder-chevron {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: transform 0.15s ease;
+}
+
+.folder-header:not(.collapsed) .folder-chevron {
+    transform: rotate(90deg);
+}
+
+.folder-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    color: var(--accent-cyan);
+}
+
+.folder-name {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.folder-actions {
+    display: flex;
+    gap: 1px;
+    flex-shrink: 0;
+}
+
+.folder-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 3px;
+    border-radius: 2px;
+    opacity: 0;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+}
+
+.folder-header:hover .folder-action-btn {
+    opacity: 1;
+}
+
+.folder-action-btn .icon {
+    width: 10px;
+    height: 10px;
+}
+
+.folder-action-btn:hover {
+    color: var(--accent-cyan);
+}
+
+.delete-folder-btn:hover {
+    color: var(--error-color) !important;
+}
+
+.folder-contents {
+    padding-left: 10px;
+}
+
+.folder-contents.hidden {
+    display: none;
+}
+
+.chat-item.dragging {
+    opacity: 0.4;
+}
+
+.move-chat-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 2px;
+    opacity: 0;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-item:hover .move-chat-btn {
+    opacity: 1;
+}
+
+.move-chat-btn:hover {
+    color: var(--accent-cyan);
+    background: rgba(0, 212, 255, 0.1);
+}
+
+.move-chat-btn .icon,
+.folder-action-btn .icon,
+.section-header-btn .icon {
+    width: 11px;
+    height: 11px;
+}
+
+/* Folder context menu */
+.folder-menu {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 4px 0;
+    min-width: 140px;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.folder-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.folder-menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.folder-menu-item.active {
+    color: var(--accent-cyan);
+}
+
+.folder-menu-item .icon {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+}
+
+.folder-menu-empty {
+    padding: 8px 10px;
+    font-size: var(--font-xs);
+    color: var(--text-muted);
+    text-align: center;
 }
 
 .empty-state {
@@ -881,6 +1090,7 @@ body::before {
     font-size: 2rem;
     color: var(--accent-cyan);
     margin-bottom: 14px;
+    animation: blink 1s step-end infinite;
     text-shadow: var(--glow-cyan);
 }
 
@@ -1720,6 +1930,48 @@ body::before {
 .settings-input:focus {
     outline: none;
     border-color: var(--accent-cyan);
+}
+
+.provider-url-input {
+    width: 100%;
+    flex: 1;
+}
+
+.url-input-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.url-test-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.url-test-btn:hover {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+.url-test-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.url-test-btn .icon {
+    width: 14px;
+    height: 14px;
 }
 
 .settings-input-group {
