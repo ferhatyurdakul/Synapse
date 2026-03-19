@@ -15,7 +15,7 @@ class ModelSelector {
         this.container = document.getElementById(containerId);
         this.models = [];
         this.selectedModel = null;
-        this.visionCache = {};
+        this.capabilityCache = {};
         this.isLoadingModel = false;
 
         this.init();
@@ -23,7 +23,7 @@ class ModelSelector {
 
     async init() {
         this.render();
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
         await this.loadModels();
         this.attachEvents();
     }
@@ -48,7 +48,7 @@ class ModelSelector {
                 <select id="model-select" class="terminal-select">
                     <option value="">Loading models...</option>
                 </select>
-                <button id="refresh-models" class="icon-btn" title="Refresh models">
+                <button id="refresh-models" class="icon-btn" title="Refresh models" aria-label="Refresh models">
                     <i data-lucide="refresh-cw" class="icon"></i>
                 </button>
                 <span id="model-load-status" class="model-load-status"></span>
@@ -88,7 +88,7 @@ class ModelSelector {
 
             eventBus.emit(Events.MODELS_LOADED, { models: this.models });
             eventBus.emit(Events.MODEL_CHANGED, { model: this.selectedModel });
-            this.checkVisionCapability(this.selectedModel);
+            this.checkModelCapabilities(this.selectedModel);
 
         } catch (error) {
             console.error('Failed to load models:', error);
@@ -121,7 +121,7 @@ class ModelSelector {
 
         providerSelect.addEventListener('change', async (e) => {
             providerManager.setProvider(e.target.value);
-            this.visionCache = {};
+            this.capabilityCache = {};
             await this.loadModels();
         });
 
@@ -137,7 +137,7 @@ class ModelSelector {
             chatService.updateModel(this.selectedModel);
 
             eventBus.emit(Events.MODEL_CHANGED, { model: this.selectedModel });
-            this.checkVisionCapability(this.selectedModel);
+            this.checkModelCapabilities(this.selectedModel);
 
             // Auto-load unloaded LM Studio models
             await this.ensureModelLoaded(this.selectedModel);
@@ -218,14 +218,15 @@ class ModelSelector {
         }
     }
 
-    async checkVisionCapability(model) {
+    async checkModelCapabilities(model) {
         if (!model) return;
 
-        // Check cache first
         const providerName = providerManager.getProviderName();
         const cacheKey = `${providerName}:${model}`;
-        if (cacheKey in this.visionCache) {
-            eventBus.emit(Events.VISION_CAPABILITY_CHANGED, { supportsVision: this.visionCache[cacheKey], model });
+        if (cacheKey in this.capabilityCache) {
+            const cached = this.capabilityCache[cacheKey];
+            eventBus.emit(Events.VISION_CAPABILITY_CHANGED, { supportsVision: cached.supportsVision, model });
+            eventBus.emit(Events.TOOLS_CAPABILITY_CHANGED, { supportsTools: cached.supportsTools, model });
             return;
         }
 
@@ -233,11 +234,14 @@ class ModelSelector {
             const provider = providerManager.getProvider();
             const info = await provider.getModelInfo(model);
             const supportsVision = info.supportsVision || false;
-            this.visionCache[cacheKey] = supportsVision;
+            const supportsTools = info.supportsTools !== undefined ? info.supportsTools : true;
+            this.capabilityCache[cacheKey] = { supportsVision, supportsTools };
             eventBus.emit(Events.VISION_CAPABILITY_CHANGED, { supportsVision, model });
+            eventBus.emit(Events.TOOLS_CAPABILITY_CHANGED, { supportsTools, model });
         } catch (e) {
-            this.visionCache[cacheKey] = false;
+            this.capabilityCache[cacheKey] = { supportsVision: false, supportsTools: true };
             eventBus.emit(Events.VISION_CAPABILITY_CHANGED, { supportsVision: false, model });
+            eventBus.emit(Events.TOOLS_CAPABILITY_CHANGED, { supportsTools: true, model });
         }
     }
 

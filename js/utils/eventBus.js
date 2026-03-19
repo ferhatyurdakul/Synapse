@@ -128,5 +128,7 @@ export const Events = {
     STREAM_STATUS_CHANGED: 'stream:statusChanged',
 
     // Tool events
-    TOOL_RESULT: 'tool:result'
+    TOOL_RESULT: 'tool:result',
+    WEB_SEARCH_TOGGLED: 'tool:webSearchToggled',
+    TOOLS_CAPABILITY_CHANGED: 'tool:capabilityChanged'
 };

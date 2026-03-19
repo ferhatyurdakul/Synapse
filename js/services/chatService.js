@@ -221,18 +221,34 @@ class ChatService {
     /**
      * Get messages formatted for Ollama API, with smart context management
      * @param {number} maxCtx - Maximum context window size
+     * @param {string} [systemPrompt] - Optional system prompt to prepend
      * @returns {Promise<{messages: Array<{role: string, content: string}>, summarized: boolean}>}
      */
-    async getMessagesForApi(maxCtx = 4096) {
+    async getMessagesForApi(maxCtx = 4096, systemPrompt = '') {
         const chat = this.getCurrentChat();
         if (!chat) return { messages: [], summarized: false };
 
-        const result = await contextService.prepareMessages(chat, maxCtx);
+        const result = await contextService.prepareMessages(chat, maxCtx, systemPrompt);
 
         return {
             messages: result.messages,
             summarized: result.summarized
         };
+    }
+
+    /**
+     * Resolve the system prompt for the current chat.
+     * Priority: folder prompt > global prompt > empty
+     * @returns {string}
+     */
+    getSystemPrompt() {
+        const chat = this.getCurrentChat();
+        if (chat?.folderId) {
+            const folder = this.getFolder(chat.folderId);
+            if (folder?.systemPrompt) return folder.systemPrompt;
+        }
+        const settings = storageService.loadSettings();
+        return settings.systemPrompt || '';
     }
 
     /**
@@ -499,6 +515,7 @@ class ChatService {
             id,
             name,
             collapsed: false,
+            systemPrompt: '',
             createdAt: new Date().toISOString()
         };
         this.saveFolders();
@@ -526,6 +543,13 @@ class ChatService {
         this.save();
         this.saveFolders();
         eventBus.emit(Events.CHAT_UPDATED);
+    }
+
+    updateFolderSystemPrompt(folderId, prompt) {
+        if (this.folders[folderId]) {
+            this.folders[folderId].systemPrompt = prompt;
+            this.saveFolders();
+        }
     }
 
     toggleFolderCollapsed(folderId) {

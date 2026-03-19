@@ -16,7 +16,7 @@ class ContextMeter {
     render() {
         const meter = document.createElement('div');
         meter.id = 'context-meter';
-        meter.className = 'context-meter';
+        meter.className = 'context-meter hidden';
         meter.innerHTML = `
             <div class="context-meter-bar">
                 <div class="context-meter-fill" id="context-meter-fill"></div>
@@ -27,7 +27,7 @@ class ContextMeter {
                 <div class="context-summary-tooltip" id="context-summary-tooltip"></div>
             </span>
         `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
 
         // Insert above the input area
         const inputContainer = document.getElementById('input-area-container');
@@ -54,6 +54,7 @@ class ContextMeter {
         const text = document.getElementById('context-meter-text');
         if (fill) fill.style.width = '0%';
         if (text) text.textContent = '—';
+        document.getElementById('context-meter')?.classList.add('hidden');
         document.getElementById('context-meter-summarized-wrapper')?.classList.add('hidden');
     }
 
@@ -71,6 +72,7 @@ class ContextMeter {
             return;
         }
 
+        document.getElementById('context-meter')?.classList.remove('hidden');
         const percent = Math.min((used / max) * 100, 100);
         fill.style.width = `${percent}%`;
 

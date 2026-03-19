@@ -13,6 +13,7 @@ import { providerManager } from './services/providerManager.js?v=34';
 import { eventBus, Events } from './utils/eventBus.js?v=34';
 import { toast } from './components/toast.js?v=34';
 import './tools/builtins.js?v=34'; // registers built-in tools into toolRegistry
+import './tools/webSearch.js?v=34'; // registers web search tool
 
 class App {
     constructor() {
@@ -39,6 +40,9 @@ class App {
 
         // Set up global event listeners
         this.setupGlobalEvents();
+
+        // Render any static Lucide icons (e.g. hamburger button)
+        refreshIcons();
 
         console.log('Synapse initialized successfully');
     }
@@ -99,20 +103,53 @@ class App {
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + N for new chat
-            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-                e.preventDefault();
-                document.getElementById('new-chat-btn')?.click();
-            }
-
-            // Escape to stop generation
+            // Escape to stop generation or close mobile sidebar
             if (e.key === 'Escape') {
+                if (this.closeMobileSidebar()) return;
                 const stopBtn = document.getElementById('stop-btn');
                 if (stopBtn && !stopBtn.classList.contains('hidden')) {
                     stopBtn.click();
                 }
             }
         });
+
+        // Mobile hamburger menu
+        this.setupMobileSidebar();
+    }
+
+    setupMobileSidebar() {
+        const hamburger = document.getElementById('hamburger-btn');
+        const sidebar = document.getElementById('sidebar-container');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        hamburger.addEventListener('click', () => {
+            sidebar.classList.add('mobile-open');
+            overlay.classList.add('active');
+        });
+
+        overlay.addEventListener('click', () => {
+            this.closeMobileSidebar();
+        });
+
+        // Close sidebar when a chat is selected on mobile
+        eventBus.on(Events.CHAT_SELECTED, () => {
+            this.closeMobileSidebar();
+        });
+
+        eventBus.on(Events.CHAT_CREATED, () => {
+            this.closeMobileSidebar();
+        });
+    }
+
+    closeMobileSidebar() {
+        const sidebar = document.getElementById('sidebar-container');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (sidebar.classList.contains('mobile-open')) {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+            return true;
+        }
+        return false;
     }
 }
 

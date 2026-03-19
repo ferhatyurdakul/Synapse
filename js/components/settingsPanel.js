@@ -1,11 +1,12 @@
 /**
- * SettingsPanel - Modal component for application settings
+ * SettingsPanel - Tabbed modal component for application settings
  * Supports per-model parameter configuration with multi-provider support
  */
 
 import { titleService } from '../services/titleService.js?v=34';
 import { contextService } from '../services/contextService.js?v=34';
 import { providerManager } from '../services/providerManager.js?v=34';
+import { storageService } from '../services/storageService.js?v=34';
 import { eventBus, Events } from '../utils/eventBus.js?v=34';
 import { toast } from './toast.js?v=34';
 
@@ -27,9 +28,16 @@ const PARAM_DEFS = {
     num_ctx: { min: 512, max: 131072, step: 512, label: 'Context Length', description: 'Token context window size' }
 };
 
+const TABS = [
+    { id: 'general', label: 'General', icon: 'sliders-horizontal' },
+    { id: 'models', label: 'Models', icon: 'brain' },
+    { id: 'tools', label: 'Tools', icon: 'wrench' }
+];
+
 class SettingsPanel {
     constructor() {
         this.isOpen = false;
+        this.activeTab = 'general';
         this.models = [];
         this.titleModels = [];
         this.summModels = [];
@@ -53,87 +61,171 @@ class SettingsPanel {
             <div class="settings-panel">
                 <div class="settings-header">
                     <h2><i data-lucide="settings" class="icon"></i> Settings</h2>
-                    <button id="settings-close-btn" class="settings-close-btn"><i data-lucide="x" class="icon"></i></button>
+                    <button id="settings-close-btn" class="settings-close-btn" title="Close" aria-label="Close"><i data-lucide="x" class="icon"></i></button>
                 </div>
+                <nav class="settings-tabs">
+                    ${TABS.map(tab => `
+                        <button class="settings-tab ${tab.id === 'general' ? 'active' : ''}" data-tab="${tab.id}">
+                            <i data-lucide="${tab.icon}" class="icon"></i>
+                            <span>${tab.label}</span>
+                        </button>
+                    `).join('')}
+                </nav>
                 <div class="settings-content">
-                    <div class="settings-section">
-                        <h3>Provider URLs</h3>
-                        <p class="settings-description">Base URLs for each provider. Change these if your LLM server runs on a different host or port.</p>
-                        ${providers.map(p => `
+                    <!-- General Tab -->
+                    <div class="settings-page active" data-page="general">
+                        <div class="settings-section">
+                            <h3>System Prompt</h3>
+                            <p class="settings-description">Default instructions sent to the model at the start of every chat. Folder prompts override this.</p>
                             <div class="settings-field">
-                                <label for="url-${p.name}">${p.label} URL</label>
-                                <div class="url-input-group">
-                                    <input type="text" id="url-${p.name}" class="settings-input provider-url-input"
-                                        placeholder="${providerManager.getDefaultUrl(p.name)}"
-                                        value="${providerManager.getProviderUrl(p.name)}">
-                                    <button class="url-test-btn" data-provider="${p.name}" title="Test connection">
-                                        <i data-lucide="wifi" class="icon"></i>
-                                    </button>
+                                <textarea id="system-prompt-input" class="settings-textarea" rows="4"
+                                    placeholder="e.g. You are a helpful coding assistant. Be concise and use examples."></textarea>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>Provider URLs</h3>
+                            <p class="settings-description">Base URLs for each provider. Change these if your LLM server runs on a different host or port.</p>
+                            ${providers.map(p => `
+                                <div class="settings-field">
+                                    <label for="url-${p.name}">${p.label} URL</label>
+                                    <div class="url-input-group">
+                                        <input type="text" id="url-${p.name}" class="settings-input provider-url-input"
+                                            placeholder="${providerManager.getDefaultUrl(p.name)}"
+                                            value="${providerManager.getProviderUrl(p.name)}">
+                                        <button class="url-test-btn" data-provider="${p.name}" title="Test connection" aria-label="Test connection">
+                                            <i data-lucide="wifi" class="icon"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Models Tab -->
+                    <div class="settings-page" data-page="models">
+                        <div class="settings-section">
+                            <h3>Model Parameters</h3>
+                            <p class="settings-description">Configure parameters for each model. Settings are saved per-model.</p>
+
+                            <div class="settings-field">
+                                <label for="param-provider-select">Provider</label>
+                                <select id="param-provider-select" class="settings-select">
+                                    ${providerOptions}
+                                </select>
+                            </div>
+
+                            <div class="settings-field">
+                                <label for="param-model-select">Configure Model</label>
+                                <select id="param-model-select" class="settings-select">
+                                    <option value="">Loading models...</option>
+                                </select>
+                            </div>
+
+                            <div class="settings-sliders" id="param-sliders">
+                                ${this.renderSlider('temperature')}
+                                ${this.renderSlider('top_p')}
+                                ${this.renderSlider('top_k')}
+                                ${this.renderSlider('repeat_penalty')}
+                                ${this.renderSlider('num_ctx')}
+                            </div>
+
+                            <button id="reset-params-btn" class="settings-btn secondary">Reset to Defaults</button>
+                        </div>
+
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Title Generation</h3>
+                                    <p class="settings-description">Auto-generate chat titles after the first exchange.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="title-enabled-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div id="title-settings-body" class="settings-toggle-body">
+                                <div class="settings-field">
+                                    <label for="title-provider-select">Provider</label>
+                                    <select id="title-provider-select" class="settings-select">
+                                        ${providerOptions}
+                                    </select>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="title-model-select">Model</label>
+                                    <select id="title-model-select" class="settings-select">
+                                        <option value="">Loading models...</option>
+                                    </select>
                                 </div>
                             </div>
-                        `).join('')}
-                    </div>
-
-                    <div class="settings-section">
-                        <h3>Model Parameters</h3>
-                        <p class="settings-description">Configure parameters for each model. Settings are saved per-model.</p>
-                        
-                        <div class="settings-field">
-                            <label for="param-provider-select">Provider</label>
-                            <select id="param-provider-select" class="settings-select">
-                                ${providerOptions}
-                            </select>
                         </div>
 
-                        <div class="settings-field">
-                            <label for="param-model-select">Configure Model</label>
-                            <select id="param-model-select" class="settings-select">
-                                <option value="">Loading models...</option>
-                            </select>
-                        </div>
-
-                        <div class="settings-sliders" id="param-sliders">
-                            ${this.renderSlider('temperature')}
-                            ${this.renderSlider('top_p')}
-                            ${this.renderSlider('top_k')}
-                            ${this.renderSlider('repeat_penalty')}
-                            ${this.renderSlider('num_ctx')}
-                        </div>
-
-                        <button id="reset-params-btn" class="settings-btn secondary">Reset to Defaults</button>
-                    </div>
-
-                    <div class="settings-section">
-                        <h3>Title Generation</h3>
-                        <p class="settings-description">Model used to auto-generate chat titles after the first exchange.</p>
-                        <div class="settings-field">
-                            <label for="title-provider-select">Provider</label>
-                            <select id="title-provider-select" class="settings-select">
-                                ${providerOptions}
-                            </select>
-                        </div>
-                        <div class="settings-field">
-                            <label for="title-model-select">Model</label>
-                            <select id="title-model-select" class="settings-select">
-                                <option value="">Loading models...</option>
-                            </select>
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Context Summarization</h3>
+                                    <p class="settings-description">Summarize conversation history when the context window fills up.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="summ-enabled-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div id="summ-settings-body" class="settings-toggle-body">
+                                <div class="settings-field">
+                                    <label for="summ-provider-select">Provider</label>
+                                    <select id="summ-provider-select" class="settings-select">
+                                        ${providerOptions}
+                                    </select>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="summ-model-select">Model</label>
+                                    <select id="summ-model-select" class="settings-select">
+                                        <option value="">Loading models...</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <h3>Context Summarization</h3>
-                        <p class="settings-description">Model used to summarize conversation history when the context window fills up. A small, fast model works well here.</p>
-                        <div class="settings-field">
-                            <label for="summ-provider-select">Provider</label>
-                            <select id="summ-provider-select" class="settings-select">
-                                ${providerOptions}
-                            </select>
-                        </div>
-                        <div class="settings-field">
-                            <label for="summ-model-select">Model</label>
-                            <select id="summ-model-select" class="settings-select">
-                                <option value="">Loading models...</option>
-                            </select>
+                    <!-- Tools Tab -->
+                    <div class="settings-page" data-page="tools">
+                        <div class="settings-section">
+                            <h3>Web Search</h3>
+                            <p class="settings-description">Enable web search as a tool. Models can call it to look up current information.</p>
+                            <div class="settings-field">
+                                <label for="search-provider-select">Search Provider</label>
+                                <select id="search-provider-select" class="settings-select">
+                                    <option value="searxng">SearXNG (local)</option>
+                                    <option value="brave">Brave Search (API key)</option>
+                                </select>
+                            </div>
+                            <div id="searxng-settings">
+                                <div class="settings-field">
+                                    <label for="searxng-url-input">SearXNG URL</label>
+                                    <div class="url-input-group">
+                                        <input type="text" id="searxng-url-input" class="settings-input provider-url-input"
+                                            placeholder="http://localhost:8888">
+                                        <button class="url-test-btn" id="test-searxng-btn" title="Test SearXNG" aria-label="Test SearXNG">
+                                            <i data-lucide="wifi" class="icon"></i>
+                                        </button>
+                                    </div>
+                                    <p class="settings-hint">Run SearXNG locally: <code>docker run -p 8888:8080 searxng/searxng</code></p>
+                                </div>
+                            </div>
+                            <div id="brave-settings" style="display:none">
+                                <div class="settings-field">
+                                    <label for="brave-api-key-input">Brave API Key</label>
+                                    <div class="url-input-group">
+                                        <input type="password" id="brave-api-key-input" class="settings-input provider-url-input"
+                                            placeholder="BSA-...">
+                                        <button class="url-test-btn" id="test-brave-btn" title="Test Brave Search" aria-label="Test Brave Search">
+                                            <i data-lucide="wifi" class="icon"></i>
+                                        </button>
+                                    </div>
+                                    <p class="settings-hint">Requires <code>python3 server.py</code> as the dev server (CORS proxy).</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -143,7 +235,7 @@ class SettingsPanel {
             </div>
         `;
         document.body.appendChild(modal);
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
     }
 
     renderSlider(param) {
@@ -155,16 +247,30 @@ class SettingsPanel {
                     <label>${def.label}</label>
                     <span class="slider-value" id="${param}-value">${value}</span>
                 </div>
-                <input type="range" 
-                    id="${param}-slider" 
+                <input type="range"
+                    id="${param}-slider"
                     class="settings-slider"
-                    min="${def.min}" 
-                    max="${def.max}" 
-                    step="${def.step}" 
+                    min="${def.min}"
+                    max="${def.max}"
+                    step="${def.step}"
                     value="${value}">
                 <p class="slider-description">${def.description}</p>
             </div>
         `;
+    }
+
+    switchTab(tabId) {
+        this.activeTab = tabId;
+
+        // Update tab buttons
+        document.querySelectorAll('.settings-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tabId);
+        });
+
+        // Update pages
+        document.querySelectorAll('.settings-page').forEach(page => {
+            page.classList.toggle('active', page.dataset.page === tabId);
+        });
     }
 
     attachEventListeners() {
@@ -173,6 +279,11 @@ class SettingsPanel {
         document.getElementById('settings-save-btn').addEventListener('click', () => this.save());
         document.getElementById('reset-params-btn').addEventListener('click', () => this.resetParams());
 
+        // Tab switching
+        document.querySelectorAll('.settings-tab').forEach(btn => {
+            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+        });
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isOpen) {
                 this.close();
@@ -180,7 +291,7 @@ class SettingsPanel {
         });
 
         // Test connection buttons
-        document.querySelectorAll('.url-test-btn').forEach(btn => {
+        document.querySelectorAll('.url-test-btn[data-provider]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const name = btn.dataset.provider;
                 const input = document.getElementById(`url-${name}`);
@@ -199,19 +310,19 @@ class SettingsPanel {
 
                     if (ok) {
                         toast.success(`${name === 'ollama' ? 'Ollama' : 'LM Studio'}: Connected`);
-                        if (icon) { icon.setAttribute('data-lucide', 'check'); lucide.createIcons(); }
+                        if (icon) { icon.setAttribute('data-lucide', 'check'); refreshIcons(); }
                     } else {
                         toast.error(`${name === 'ollama' ? 'Ollama' : 'LM Studio'}: Not reachable`);
-                        if (icon) { icon.setAttribute('data-lucide', 'x'); lucide.createIcons(); }
+                        if (icon) { icon.setAttribute('data-lucide', 'x'); refreshIcons(); }
                     }
                 } catch {
                     toast.error(`${name === 'ollama' ? 'Ollama' : 'LM Studio'}: Connection failed`);
-                    if (icon) { icon.setAttribute('data-lucide', 'x'); lucide.createIcons(); }
+                    if (icon) { icon.setAttribute('data-lucide', 'x'); refreshIcons(); }
                 }
 
                 btn.disabled = false;
                 setTimeout(() => {
-                    if (icon) { icon.setAttribute('data-lucide', origIcon); lucide.createIcons(); }
+                    if (icon) { icon.setAttribute('data-lucide', origIcon); refreshIcons(); }
                 }, 2000);
             });
         });
@@ -237,6 +348,16 @@ class SettingsPanel {
             }
         });
 
+        // Title enabled toggle
+        document.getElementById('title-enabled-toggle').addEventListener('change', (e) => {
+            document.getElementById('title-settings-body').classList.toggle('collapsed', !e.target.checked);
+        });
+
+        // Summarization enabled toggle
+        document.getElementById('summ-enabled-toggle').addEventListener('change', (e) => {
+            document.getElementById('summ-settings-body').classList.toggle('collapsed', !e.target.checked);
+        });
+
         // Title provider change
         document.getElementById('title-provider-select').addEventListener('change', async (e) => {
             await this.loadModelsForProvider(e.target.value, 'title-model-select');
@@ -245,6 +366,59 @@ class SettingsPanel {
         // Summarization provider change
         document.getElementById('summ-provider-select').addEventListener('change', async (e) => {
             await this.loadModelsForProvider(e.target.value, 'summ-model-select');
+        });
+
+        // Search provider toggle
+        document.getElementById('search-provider-select').addEventListener('change', (e) => {
+            this.toggleSearchProviderUI(e.target.value);
+        });
+
+        // Test SearXNG connection
+        document.getElementById('test-searxng-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('test-searxng-btn');
+            const url = document.getElementById('searxng-url-input').value.trim() || 'http://localhost:8888';
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${url}/search?q=test&format=json&categories=general`);
+                if (res.ok) {
+                    toast.success('SearXNG: Connected');
+                    this.flashTestIcon(btn, true);
+                } else {
+                    toast.error(`SearXNG: HTTP ${res.status}`);
+                    this.flashTestIcon(btn, false);
+                }
+            } catch {
+                toast.error('SearXNG: Connection failed');
+                this.flashTestIcon(btn, false);
+            }
+            btn.disabled = false;
+        });
+
+        // Test Brave Search connection (via proxy)
+        document.getElementById('test-brave-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('test-brave-btn');
+            const apiKey = document.getElementById('brave-api-key-input').value.trim();
+            if (!apiKey) {
+                toast.error('Enter a Brave API key first');
+                return;
+            }
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/brave/res/v1/web/search?q=test&count=1`, {
+                    headers: { 'X-Subscription-Token': apiKey, 'Accept': 'application/json' }
+                });
+                if (res.ok) {
+                    toast.success('Brave Search: Connected');
+                    this.flashTestIcon(btn, true);
+                } else {
+                    toast.error(`Brave Search: HTTP ${res.status}`);
+                    this.flashTestIcon(btn, false);
+                }
+            } catch {
+                toast.error('Brave Search: Connection failed. Is server.py running?');
+                this.flashTestIcon(btn, false);
+            }
+            btn.disabled = false;
         });
 
         // Slider value updates
@@ -267,6 +441,19 @@ class SettingsPanel {
         this.isOpen = true;
         document.getElementById('settings-modal').classList.remove('hidden');
 
+        const settings = storageService.loadSettings();
+
+        // Load web search settings
+        const searchProvider = settings.searchProvider || 'searxng';
+        document.getElementById('search-provider-select').value = searchProvider;
+        this.toggleSearchProviderUI(searchProvider);
+        document.getElementById('searxng-url-input').value = settings.searxngUrl || '';
+        document.getElementById('brave-api-key-input').value = settings.braveApiKey || '';
+
+        // Load global system prompt
+        const sysPromptInput = document.getElementById('system-prompt-input');
+        if (sysPromptInput) sysPromptInput.value = settings.systemPrompt || '';
+
         // Load current provider URLs
         for (const p of providerManager.getAllProviders()) {
             const input = document.getElementById(`url-${p.name}`);
@@ -279,18 +466,40 @@ class SettingsPanel {
         this.updateTopKVisibility(paramProviderSelect.value);
         await this.loadModelsForProvider(paramProviderSelect.value, 'param-model-select');
 
-        // Load title provider/model
+        // Load title toggle + provider/model
+        const titleEnabled = settings.titleEnabled !== false;
+        document.getElementById('title-enabled-toggle').checked = titleEnabled;
+        document.getElementById('title-settings-body').classList.toggle('collapsed', !titleEnabled);
         await this.loadTitleSettings();
 
-        // Load summarization provider/model
+        // Load summarization toggle + provider/model
+        const summEnabled = settings.summarizationEnabled !== false;
+        document.getElementById('summ-enabled-toggle').checked = summEnabled;
+        document.getElementById('summ-settings-body').classList.toggle('collapsed', !summEnabled);
         await this.loadSummarizationSettings();
 
-        this.loadCurrentSettings();
     }
 
     close() {
         this.isOpen = false;
         document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    toggleSearchProviderUI(provider) {
+        document.getElementById('searxng-settings').style.display = provider === 'searxng' ? '' : 'none';
+        document.getElementById('brave-settings').style.display = provider === 'brave' ? '' : 'none';
+    }
+
+    flashTestIcon(btn, success) {
+        const icon = btn.querySelector('.icon');
+        if (!icon) return;
+        const orig = icon.getAttribute('data-lucide');
+        icon.setAttribute('data-lucide', success ? 'check' : 'x');
+        refreshIcons();
+        setTimeout(() => {
+            icon.setAttribute('data-lucide', orig);
+            refreshIcons();
+        }, 2000);
     }
 
     async loadModelsForProvider(providerName, selectId) {
@@ -394,9 +603,6 @@ class SettingsPanel {
         });
     }
 
-    loadCurrentSettings() {
-        // Already handled in open()
-    }
 
     getAllModelSettings() {
         const stored = localStorage.getItem('synapse_model_settings');
@@ -469,6 +675,19 @@ class SettingsPanel {
         if (selectedSummModel) {
             contextService.setSummarizationModel(selectedSummModel);
             contextService.setSummarizationProvider(selectedSummProvider);
+        }
+
+        // Save global system prompt + web search settings
+        {
+            const settings = storageService.loadSettings();
+            const sysPromptInput = document.getElementById('system-prompt-input');
+            if (sysPromptInput) settings.systemPrompt = sysPromptInput.value.trim();
+            settings.titleEnabled = document.getElementById('title-enabled-toggle').checked;
+            settings.summarizationEnabled = document.getElementById('summ-enabled-toggle').checked;
+            settings.searchProvider = document.getElementById('search-provider-select').value;
+            settings.searxngUrl = document.getElementById('searxng-url-input').value.trim();
+            settings.braveApiKey = document.getElementById('brave-api-key-input').value.trim();
+            storageService.saveSettings(settings);
         }
 
         toast.success('Settings saved');

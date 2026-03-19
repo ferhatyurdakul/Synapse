@@ -7,7 +7,7 @@ import { chatService } from '../services/chatService.js?v=34';
 import { providerManager } from '../services/providerManager.js?v=34';
 import { eventBus, Events } from '../utils/eventBus.js?v=34';
 import { openSettings } from './settingsPanel.js?v=34';
-import { renderMarkdown } from '../utils/markdown.js?v=34';
+import { renderMarkdown, escapeHtml } from '../utils/markdown.js?v=34';
 import { toast } from './toast.js?v=34';
 
 class ChatSidebar {
@@ -37,7 +37,7 @@ class ChatSidebar {
         this.refreshChatList();
 
         // Render Lucide icons in sidebar
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
     }
 
     render() {
@@ -48,7 +48,7 @@ class ChatSidebar {
                         <span class="title-icon">⟩</span>
                         <span class="title-text">Synapse</span>
                     </h1>
-                    <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="${this.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+                    <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="${this.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}" aria-label="${this.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
                         <i data-lucide="${this.collapsed ? 'panel-left-open' : 'panel-left-close'}" class="icon"></i>
                     </button>
                 </div>
@@ -63,11 +63,11 @@ class ChatSidebar {
                     <div class="search-wrapper">
                         <span class="search-icon"><i data-lucide="search" class="icon"></i></span>
                         <input type="text" id="chat-search-input" class="search-input" placeholder="Search chats...">
-                        <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search"><i data-lucide="x" class="icon"></i></button>
-                        <button id="filter-toggle-btn" class="filter-toggle-btn" title="Toggle filters">
+                        <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search" aria-label="Clear search"><i data-lucide="x" class="icon"></i></button>
+                        <button id="filter-toggle-btn" class="filter-toggle-btn" title="Toggle filters" aria-label="Toggle filters">
                             <span class="filter-icon"><i data-lucide="filter" class="icon"></i></span>
                         </button>
-                        <button id="filter-clear-btn" class="filter-clear-btn hidden" title="Clear filters"><i data-lucide="x" class="icon"></i></button>
+                        <button id="filter-clear-btn" class="filter-clear-btn hidden" title="Clear filters" aria-label="Clear filters"><i data-lucide="x" class="icon"></i></button>
                     </div>
                     <div id="filter-panel" class="filter-panel hidden">
                         <div class="filter-flags">
@@ -105,7 +105,7 @@ class ChatSidebar {
                 <div class="sidebar-section">
                     <div class="section-header">
                         <span>HISTORY</span>
-                        <button id="add-folder-btn" class="section-header-btn" title="New folder">
+                        <button id="add-folder-btn" class="section-header-btn" title="New folder" aria-label="New folder">
                             <i data-lucide="folder-plus" class="icon"></i>
                         </button>
                     </div>
@@ -197,7 +197,7 @@ class ChatSidebar {
             filterToggle.classList.toggle('active', this.filtersVisible);
             if (this.filtersVisible) {
                 this.populateFilterOptions();
-                if (typeof lucide !== 'undefined') lucide.createIcons();
+                refreshIcons();
             }
         });
 
@@ -325,7 +325,7 @@ class ChatSidebar {
         toggleBtn.title = this.collapsed ? 'Expand sidebar' : 'Collapse sidebar';
         toggleBtn.innerHTML = `<i data-lucide="${this.collapsed ? 'panel-left-open' : 'panel-left-close'}" class="icon"></i>`;
 
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
     }
 
     refreshChatList() {
@@ -387,7 +387,7 @@ class ChatSidebar {
 
         if (chats.length === 0) {
             listEl.innerHTML = query
-                ? `<div class="empty-state">No results for "${this.escapeHtml(query)}"</div>`
+                ? `<div class="empty-state">No results for "${escapeHtml(query)}"</div>`
                 : `<div class="empty-state">No chats yet.<br>Click "New Chat" to start.</div>`;
             return;
         }
@@ -408,7 +408,7 @@ class ChatSidebar {
 
         // Build folder context menu options
         const folderMenuOptions = folders.map(f =>
-            `<div class="folder-menu-item" data-folder-id="${f.id}">${this.escapeHtml(f.name)}</div>`
+            `<div class="folder-menu-item" data-folder-id="${f.id}">${escapeHtml(f.name)}</div>`
         ).join('');
 
         let html = '';
@@ -425,12 +425,14 @@ class ChatSidebar {
                         <div class="folder-header-left">
                             <i data-lucide="chevron-right" class="icon folder-chevron"></i>
                             <i data-lucide="folder" class="icon folder-icon"></i>
-                            <span class="folder-name">${this.escapeHtml(folder.name)}</span>
+                            <span class="folder-name">${escapeHtml(folder.name)}</span>
                             <span class="folder-count">${fChats.length}</span>
                         </div>
                         <div class="folder-actions">
-                            <button class="folder-action-btn rename-folder-btn" data-folder-id="${folder.id}" title="Rename folder"><i data-lucide="pencil" class="icon"></i></button>
-                            <button class="folder-action-btn delete-folder-btn" data-folder-id="${folder.id}" title="Delete folder"><i data-lucide="x" class="icon"></i></button>
+                            <button class="folder-action-btn newchat-folder-btn" data-folder-id="${folder.id}" title="New chat in folder" aria-label="New chat in folder"><i data-lucide="plus" class="icon"></i></button>
+                            <button class="folder-action-btn sysprompt-folder-btn" data-folder-id="${folder.id}" title="System prompt" aria-label="System prompt"><i data-lucide="message-square-text" class="icon"></i></button>
+                            <button class="folder-action-btn rename-folder-btn" data-folder-id="${folder.id}" title="Rename folder" aria-label="Rename folder"><i data-lucide="pencil" class="icon"></i></button>
+                            <button class="folder-action-btn delete-folder-btn" data-folder-id="${folder.id}" title="Delete folder" aria-label="Delete folder"><i data-lucide="x" class="icon"></i></button>
                         </div>
                     </div>
                     <div class="folder-contents ${folder.collapsed && !query ? 'hidden' : ''}">
@@ -447,19 +449,19 @@ class ChatSidebar {
         this.attachChatItemHandlers(listEl);
         this.attachFolderHandlers(listEl);
 
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
     }
 
     renderChatItem(chat, currentId, query, searchResults, folderMenuOptions) {
         const title = query
-            ? this.highlightMatch(this.escapeHtml(chat.title), query)
-            : this.escapeHtml(chat.title);
+            ? this.highlightMatch(escapeHtml(chat.title), query)
+            : escapeHtml(chat.title);
 
         let snippetHtml = '';
         if (searchResults && searchResults.has(chat.id)) {
             const result = searchResults.get(chat.id);
             if (result.type === 'message' && result.snippet) {
-                const highlighted = this.highlightMatch(this.escapeHtml(result.snippet), query);
+                const highlighted = this.highlightMatch(escapeHtml(result.snippet), query);
                 snippetHtml = `<div class="chat-search-snippet">${highlighted}</div>`;
             }
         }
@@ -467,16 +469,15 @@ class ChatSidebar {
         return `
             <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}" draggable="true">
                 <div class="chat-item-content">
-                    <span class="chat-icon"><i data-lucide="message-square" class="icon"></i></span>
                     <div class="chat-item-text">
                         <span class="chat-title">${title}</span>
                         ${snippetHtml}
                     </div>
                 </div>
                 <div class="chat-item-actions">
-                    <button class="move-chat-btn" data-id="${chat.id}" title="Move to folder"><i data-lucide="folder-input" class="icon"></i></button>
-                    <button class="rename-chat-btn" data-id="${chat.id}" title="Rename chat"><i data-lucide="pencil" class="icon"></i></button>
-                    <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat"><i data-lucide="x" class="icon"></i></button>
+                    <button class="move-chat-btn" data-id="${chat.id}" title="Move to folder" aria-label="Move to folder"><i data-lucide="folder-input" class="icon"></i></button>
+                    <button class="rename-chat-btn" data-id="${chat.id}" title="Rename chat" aria-label="Rename chat"><i data-lucide="pencil" class="icon"></i></button>
+                    <button class="delete-chat-btn" data-id="${chat.id}" title="Delete chat" aria-label="Delete chat"><i data-lucide="x" class="icon"></i></button>
                 </div>
             </div>
         `;
@@ -518,7 +519,7 @@ class ChatSidebar {
                 const chatTitle = chat?.title || 'Untitled chat';
                 this.showConfirmDialog(
                     'Delete Chat',
-                    `Delete "${this.escapeHtml(chatTitle)}"? This cannot be undone.`,
+                    `Delete "${escapeHtml(chatTitle)}"? This cannot be undone.`,
                     () => chatService.deleteChat(chatId)
                 );
             });
@@ -554,6 +555,29 @@ class ChatSidebar {
             });
         });
 
+        // New chat in folder
+        listEl.querySelectorAll('.newchat-folder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const folderId = btn.dataset.folderId;
+                if (!this.selectedModel) {
+                    toast.warning('Select a model first');
+                    return;
+                }
+                const chatId = chatService.createChat(this.selectedModel);
+                chatService.moveChatToFolder(chatId, folderId);
+                chatService.selectChat(chatId);
+            });
+        });
+
+        // Folder system prompt
+        listEl.querySelectorAll('.sysprompt-folder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showFolderSystemPrompt(btn.dataset.folderId);
+            });
+        });
+
         // Folder delete
         listEl.querySelectorAll('.delete-folder-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -562,7 +586,7 @@ class ChatSidebar {
                 const folder = chatService.getFolder(folderId);
                 this.showConfirmDialog(
                     'Delete Folder',
-                    `Delete folder "${this.escapeHtml(folder?.name || '')}"? Chats inside will be moved to the root list.`,
+                    `Delete folder "${escapeHtml(folder?.name || '')}"? Chats inside will be moved to the root list.`,
                     () => chatService.deleteFolder(folderId)
                 );
             });
@@ -677,7 +701,7 @@ class ChatSidebar {
             <div class="export-panel">
                 <div class="export-header">
                     <h2>Export Chat</h2>
-                    <button class="export-close-btn" id="export-close-btn"><i data-lucide="x" class="icon"></i></button>
+                    <button class="export-close-btn" id="export-close-btn" title="Close" aria-label="Close"><i data-lucide="x" class="icon"></i></button>
                 </div>
                 <div class="export-body">
                     <div class="export-field">
@@ -703,7 +727,7 @@ class ChatSidebar {
         `;
 
         document.body.appendChild(modal);
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
 
         document.getElementById('export-overlay').addEventListener('click', () => this.closeExportModal());
         document.getElementById('export-close-btn').addEventListener('click', () => this.closeExportModal());
@@ -749,7 +773,7 @@ class ChatSidebar {
     }
 
     buildChatHtml(chat, includeThinking = true) {
-        const title = this.escapeHtml(chat.title || 'Chat Export');
+        const title = escapeHtml(chat.title || 'Chat Export');
         const blocks = [];
 
         for (const msg of chat.messages) {
@@ -762,14 +786,14 @@ class ChatSidebar {
                 thinkingHtml = `
                     <details class="export-thinking">
                       <summary>Thinking</summary>
-                      <pre>${this.escapeHtml(String(msg.thinking).trim())}</pre>
+                      <pre>${escapeHtml(String(msg.thinking).trim())}</pre>
                     </details>
                 `;
             }
 
             blocks.push(`
                 <div class="export-message export-${role}">
-                    <div class="export-meta">${this.escapeHtml(who)}</div>
+                    <div class="export-meta">${escapeHtml(who)}</div>
                     ${thinkingHtml}
                     <div class="export-content">${contentHtml}</div>
                 </div>
@@ -991,6 +1015,48 @@ class ChatSidebar {
         requestAnimationFrame(() => this.startFolderRename(id));
     }
 
+    showFolderSystemPrompt(folderId) {
+        const folder = chatService.getFolder(folderId);
+        if (!folder) return;
+
+        const group = document.querySelector(`.folder-group[data-folder-id="${folderId}"]`);
+        if (!group) return;
+
+        // Toggle off if already showing
+        const existing = group.querySelector('.folder-sysprompt-editor');
+        if (existing) { existing.remove(); return; }
+
+        const editor = document.createElement('div');
+        editor.className = 'folder-sysprompt-editor';
+        editor.innerHTML = `
+            <textarea class="folder-sysprompt-textarea" rows="3"
+                placeholder="System prompt for this folder (overrides global)">${escapeHtml(folder.systemPrompt || '')}</textarea>
+            <div class="folder-sysprompt-actions">
+                <button class="folder-sysprompt-save">Save</button>
+                <button class="folder-sysprompt-cancel">Cancel</button>
+            </div>
+        `;
+
+        const contents = group.querySelector('.folder-contents');
+        group.insertBefore(editor, contents);
+
+        const textarea = editor.querySelector('textarea');
+        textarea.focus();
+
+        editor.querySelector('.folder-sysprompt-save').addEventListener('click', () => {
+            chatService.updateFolderSystemPrompt(folderId, textarea.value.trim());
+            editor.remove();
+            toast.success('Folder system prompt saved');
+        });
+
+        editor.querySelector('.folder-sysprompt-cancel').addEventListener('click', () => {
+            editor.remove();
+        });
+
+        // Prevent folder toggle when clicking inside editor
+        editor.addEventListener('click', (e) => e.stopPropagation());
+    }
+
     startFolderRename(folderId) {
         const group = document.querySelector(`.folder-group[data-folder-id="${folderId}"]`);
         if (!group) return;
@@ -1047,7 +1113,7 @@ class ChatSidebar {
         for (const f of folders) {
             const active = chat?.folderId === f.id ? ' active' : '';
             items += `<div class="folder-menu-item${active}" data-folder-id="${f.id}">
-                <i data-lucide="folder" class="icon"></i> ${this.escapeHtml(f.name)}
+                <i data-lucide="folder" class="icon"></i> ${escapeHtml(f.name)}
             </div>`;
         }
         if (folders.length === 0) {
@@ -1063,7 +1129,7 @@ class ChatSidebar {
         menu.style.top = `${rect.bottom + 4}px`;
         document.body.appendChild(menu);
 
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
 
         // Click handler
         menu.querySelectorAll('.folder-menu-item').forEach(item => {
@@ -1085,11 +1151,6 @@ class ChatSidebar {
         setTimeout(() => document.addEventListener('click', close, true), 0);
     }
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
 export function createChatSidebar(containerId) {

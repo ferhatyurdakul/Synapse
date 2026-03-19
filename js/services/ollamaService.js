@@ -43,6 +43,14 @@ class OllamaService {
         this.noThinkingModels.add(model.toLowerCase());
     }
 
+    markModelNoTools(model) {
+        this.noToolsModels.add(model.toLowerCase());
+    }
+
+    supportsTools(model) {
+        return !this.noToolsModels.has(model.toLowerCase());
+    }
+
     /**
      * Fetch list of locally available models
      * @returns {Promise<Array<{name: string, size: number, modifiedAt: string}>>}
@@ -118,14 +126,24 @@ class OllamaService {
                 );
             }
 
+            // Detect tool calling support from capabilities array (Ollama 0.6+)
+            // Falls back to template check for older versions
+            let supportsTools = false;
+            if (Array.isArray(data.capabilities)) {
+                supportsTools = data.capabilities.includes('tools');
+            } else if (typeof data.template === 'string') {
+                supportsTools = data.template.includes('.Tools') || data.template.includes('.ToolCalls');
+            }
+
             return {
                 ...data,
                 contextLength,
-                supportsVision
+                supportsVision,
+                supportsTools
             };
         } catch (error) {
             console.error('Error fetching model info:', error);
-            return { contextLength: 131072, supportsVision: false }; // Return max on error
+            return { contextLength: 131072, supportsVision: false, supportsTools: false };
         }
     }
 
@@ -211,7 +229,7 @@ class OllamaService {
                 // Retry without tools if they were sent
                 if (requestBody.tools) {
                     console.log(`Model ${model} doesn't support tool calling, retrying without tools`);
-                    this.noToolsModels.add(model.toLowerCase());
+                    this.markModelNoTools(model);
                     return this.chat(model, messages, onChunk, options);
                 }
             }

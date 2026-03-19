@@ -70,9 +70,14 @@ class ContextService {
      * Uses an existing cached summary if available — never generates one.
      * @param {Object} chat
      * @param {number} maxCtx
+     * @param {string} [systemPrompt] - Optional system prompt to prepend
      * @returns {{ messages: Array, summarized: boolean }}
      */
-    async prepareMessages(chat, maxCtx) {
+    async prepareMessages(chat, maxCtx, systemPrompt = '') {
+        const sysMessages = systemPrompt
+            ? [{ role: 'system', content: systemPrompt }]
+            : [];
+
         const messages = chat.messages.map(msg => {
             // Tool messages are stored with role:'tool' but sent to the API as user messages
             if (msg.role === 'tool') {
@@ -94,13 +99,13 @@ class ContextService {
                 content: `Previous conversation summary:\n${chat.summary}`
             };
             return {
-                messages: [summaryMessage, ...recentMessages],
+                messages: [...sysMessages, summaryMessage, ...recentMessages],
                 summarized: true
             };
         }
 
         // No summary yet — send all messages as-is
-        return { messages, summarized: false };
+        return { messages: [...sysMessages, ...messages], summarized: false };
     }
 
     /**

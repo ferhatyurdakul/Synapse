@@ -17,6 +17,14 @@ class LMStudioService {
         this.noToolsModels = new Set();
     }
 
+    markModelNoTools(model) {
+        this.noToolsModels.add(model.toLowerCase());
+    }
+
+    supportsTools(model) {
+        return !this.noToolsModels.has(model.toLowerCase());
+    }
+
     /**
      * Fetch list of available models from LM Studio
      * Prefers /api/v0/models for rich data (state, type), falls back to /v1/models
@@ -232,7 +240,7 @@ class LMStudioService {
 
             if (!response.ok && response.status === 400 && requestBody.tools) {
                 console.log(`Model ${requestBody.model} doesn't support tool calling, retrying without tools`);
-                this.noToolsModels.add(modelKey);
+                this.markModelNoTools(requestBody.model);
                 return this.chat(model, messages, onChunk, options);
             }
 

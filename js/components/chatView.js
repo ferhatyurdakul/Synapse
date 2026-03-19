@@ -4,11 +4,12 @@
 
 import { chatService } from '../services/chatService.js?v=34';
 import { contextService } from '../services/contextService.js?v=34';
+import { storageService } from '../services/storageService.js?v=34';
 import { providerManager } from '../services/providerManager.js?v=34';
 import { titleService } from '../services/titleService.js?v=34';
 import { toolRegistry } from '../services/toolRegistry.js?v=34';
 import { eventBus, Events } from '../utils/eventBus.js?v=34';
-import { renderMarkdown, renderLatexInElement } from '../utils/markdown.js?v=34';
+import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js?v=34';
 import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=34';
 import { getModelParams } from './settingsPanel.js?v=34';
 import { toast } from './toast.js?v=34';
@@ -38,6 +39,7 @@ class ChatView {
         this.currentThinkingBlock = null;
         this.selectedModel = null;
         this.activeStreams = new Map(); // chatId -> stream state
+        this.webSearchEnabled = false;
 
         this.init();
     }
@@ -54,13 +56,21 @@ class ChatView {
                 <div id="messages-container" class="messages-container">
                     ${this.buildWelcomeScreen()}
                 </div>
+                <button id="scroll-to-bottom" class="scroll-to-bottom-btn" title="Jump to latest message" aria-label="Jump to latest message">
+                    <i data-lucide="arrow-down" class="icon"></i>
+                </button>
             </div>
         `;
         this.attachPromptClickHandlers();
+        document.getElementById('scroll-to-bottom').addEventListener('click', () => {
+            this.scrollToBottom(true);
+        });
+        refreshIcons();
     }
 
     attachScrollTracker() {
         const container = document.getElementById('messages-container');
+        const scrollBtn = document.getElementById('scroll-to-bottom');
         this._userScrolledUp = false;
         this._isProgrammaticScroll = false;
 
@@ -69,6 +79,7 @@ class ChatView {
             const threshold = 60;
             const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
             this._userScrolledUp = !atBottom;
+            scrollBtn.classList.toggle('visible', !atBottom);
         });
     }
 
@@ -123,6 +134,10 @@ class ChatView {
             await this.handleUserMessage(content, images);
         });
 
+        eventBus.on(Events.WEB_SEARCH_TOGGLED, ({ enabled }) => {
+            this.webSearchEnabled = enabled;
+        });
+
         eventBus.on(Events.STREAM_END, ({ aborted }) => {
             if (aborted) {
                 // Only abort the stream for the currently viewed chat
@@ -161,7 +176,7 @@ class ChatView {
 
             msgEl.classList.add('editing');
             contentEl.innerHTML = `
-                <textarea class="message-edit-area">${this.escapeHtml(originalContent)}</textarea>
+                <textarea class="message-edit-area">${escapeHtml(originalContent)}</textarea>
                 <div class="edit-actions">
                     <button class="edit-save-btn" onclick="saveEditMessage(${index})">
                         <i data-lucide="check" class="icon"></i> Save & Submit
@@ -171,7 +186,7 @@ class ChatView {
                     </button>
                 </div>
             `;
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+            refreshIcons();
 
             // Focus textarea and move cursor to end
             const textarea = contentEl.querySelector('.message-edit-area');
@@ -300,7 +315,7 @@ class ChatView {
 
         // Initialize Lucide icons
         if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+            refreshIcons();
         }
 
         this.scrollToBottom(true);
@@ -369,14 +384,15 @@ class ChatView {
             if (isViewing()) {
                 streamState.contentEl.innerHTML = '<span class="summarizing-hint"><span class="blink-dot">●</span> Preparing context...</span>';
             }
-            const prepared = await chatService.getMessagesForApi(maxCtx);
+            const systemPrompt = chatService.getSystemPrompt();
+            const prepared = await chatService.getMessagesForApi(maxCtx, systemPrompt);
             let apiMessages = prepared.messages;
 
             if (isViewing()) {
                 streamState.contentEl.innerHTML = '<span class="waiting-hint"><span class="blink-dot">●</span> Waiting for model...</span>';
             }
 
-            const tools = toolRegistry.getSchemas();
+            const tools = this.webSearchEnabled ? toolRegistry.getSchemas() : [];
             const MAX_TOOL_ITERATIONS = 5;
             let finalResult = null;
 
@@ -425,7 +441,7 @@ class ChatView {
                                 );
                                 streamState.messageEl.insertBefore(streamState.thinkingBlock, streamState.contentEl);
                                 this.currentThinkingBlock = streamState.thinkingBlock;
-                                if (typeof lucide !== 'undefined') lucide.createIcons();
+                                refreshIcons();
                             } else {
                                 updateThinkingBlock(streamState.thinkingBlock, totalThinking);
                             }
@@ -442,15 +458,22 @@ class ChatView {
                             if (label) label.textContent = 'Thinking';
                         }
 
-                        // Update content
+                        // Update content (throttled to once per frame)
                         if (chunk.fullContent) {
-                            streamState.contentEl.innerHTML = renderMarkdown(chunk.fullContent);
-                            renderLatexInElement(streamState.contentEl);
+                            if (!streamState._renderPending) {
+                                streamState._renderPending = true;
+                                requestAnimationFrame(() => {
+                                    streamState._renderPending = false;
+                                    if (streamState.contentEl && streamState.fullContent) {
+                                        streamState.contentEl.innerHTML = renderMarkdown(streamState.fullContent);
+                                        renderLatexInElement(streamState.contentEl);
+                                        this.scrollToBottom();
+                                    }
+                                });
+                            }
                         }
-
-                        this.scrollToBottom();
                     },
-                    { options: modelParams, tools, signal: abortController.signal }
+                    { options: modelParams, ...(tools.length ? { tools } : {}), signal: abortController.signal }
                 );
 
                 finalResult = result;
@@ -509,6 +532,11 @@ class ChatView {
 
             const result = finalResult;
 
+            // If tools were enabled but model turned out not to support them, update UI
+            if (this.webSearchEnabled && streamProvider.supportsTools && !streamProvider.supportsTools(chat.model)) {
+                eventBus.emit(Events.TOOLS_CAPABILITY_CHANGED, { supportsTools: false });
+            }
+
             // Stream completed — persist to the correct chat
             const totalUsed = (result.promptEvalCount || 0) + (result.evalCount || 0);
 
@@ -549,17 +577,23 @@ class ChatView {
             if (streamState.fullContent) {
                 chatService.addMessageToChat(streamChatId, 'assistant', streamState.fullContent, streamState.fullThinking, statsData);
 
-                // Generate title after the first exchange (overrides the auto-truncated placeholder)
-                const updatedChat = chatService.getChat(streamChatId);
-                if (updatedChat && updatedChat.messages.length === 2) {
-                    const firstUserMsg = updatedChat.messages.find(m => m.role === 'user');
-                    if (firstUserMsg) {
-                        this.generateChatTitle(updatedChat, firstUserMsg.content, streamState.fullContent);
+                const appSettings = storageService.loadSettings();
+
+                // Generate title after the first exchange
+                if (appSettings.titleEnabled !== false) {
+                    const updatedChat = chatService.getChat(streamChatId);
+                    if (updatedChat && updatedChat.messages.length === 2) {
+                        const firstUserMsg = updatedChat.messages.find(m => m.role === 'user');
+                        if (firstUserMsg) {
+                            this.generateChatTitle(updatedChat, firstUserMsg.content, streamState.fullContent);
+                        }
                     }
                 }
 
                 // Trigger background summarization if context is getting full
-                this.maybeRunBackgroundSummarization(streamChatId, maxCtx);
+                if (appSettings.summarizationEnabled !== false) {
+                    this.maybeRunBackgroundSummarization(streamChatId, maxCtx);
+                }
             }
 
         } catch (error) {
@@ -570,7 +604,7 @@ class ChatView {
                 // Only show error in DOM if user is viewing this chat
                 if (chatService.getCurrentChatId() === streamChatId) {
                     streamState.contentEl.innerHTML = `<span class="error-message"><i data-lucide="alert-triangle" class="icon"></i> Error: ${error.message}</span>`;
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    refreshIcons();
                 }
                 eventBus.emit(Events.STREAM_ERROR, { error, chatId: streamChatId });
             }
@@ -647,14 +681,14 @@ class ChatView {
             : `⟨ ${model || this.selectedModel || 'AI'}`;
 
         // Build action buttons based on role
-        let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy"><i data-lucide="copy" class="icon"></i></button>`;
+        let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy" aria-label="Copy"><i data-lucide="copy" class="icon"></i></button>`;
 
         if (role === 'user' && msgIndex >= 0) {
-            actionButtons += `<button class="message-action-btn edit-btn" onclick="editMessage(${msgIndex})" title="Edit message"><i data-lucide="pencil" class="icon"></i></button>`;
+            actionButtons += `<button class="message-action-btn edit-btn" onclick="editMessage(${msgIndex})" title="Edit message" aria-label="Edit message"><i data-lucide="pencil" class="icon"></i></button>`;
         }
 
         if (role === 'assistant' && msgIndex >= 0) {
-            actionButtons += `<button class="message-action-btn regenerate-btn" onclick="regenerateFromHere(${msgIndex})" title="Regenerate from here"><i data-lucide="rotate-cw" class="icon"></i></button>`;
+            actionButtons += `<button class="message-action-btn regenerate-btn" onclick="regenerateFromHere(${msgIndex})" title="Regenerate from here" aria-label="Regenerate from here"><i data-lucide="rotate-cw" class="icon"></i></button>`;
         }
 
         const imageHtml = images && images.length > 0
@@ -697,7 +731,7 @@ class ChatView {
 
         // Initialize Lucide icons
         if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+            refreshIcons();
         }
     }
 
@@ -713,8 +747,8 @@ class ChatView {
         el.innerHTML = `
             <div class="tool-message-header">
                 <i data-lucide="terminal" class="icon"></i>
-                <span class="tool-message-name">${this.escapeHtml(msg.toolName)}</span>
-                <code class="tool-message-input">${this.escapeHtml(msg.input)}</code>
+                <span class="tool-message-name">${escapeHtml(msg.toolName)}</span>
+                <code class="tool-message-input">${escapeHtml(msg.input)}</code>
             </div>
             <div class="tool-message-result ${msg.error ? 'tool-message-error' : ''}">
                 ${renderMarkdown(msg.content)}
@@ -722,13 +756,7 @@ class ChatView {
         `;
 
         container.appendChild(el);
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        refreshIcons();
     }
 
     createStreamingMessage() {
@@ -750,7 +778,7 @@ class ChatView {
             <div class="message-header">
                 <span class="message-role">⟨ ${modelDisplay}</span>
                 <div class="message-actions">
-                    <button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message"><i data-lucide="copy" class="icon"></i></button>
+                    <button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy message" aria-label="Copy message"><i data-lucide="copy" class="icon"></i></button>
                 </div>
             </div>
             <div class="message-content">
@@ -829,7 +857,10 @@ class ChatView {
         this._isProgrammaticScroll = true;
         container.scrollTop = container.scrollHeight;
         requestAnimationFrame(() => { this._isProgrammaticScroll = false; });
-        if (force) this._userScrolledUp = false;
+        if (force) {
+            this._userScrolledUp = false;
+            document.getElementById('scroll-to-bottom')?.classList.remove('visible');
+        }
     }
 }
 

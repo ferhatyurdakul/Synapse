@@ -75,7 +75,10 @@ class StorageService {
             thinkingCollapsed: true,
             sidebarOpen: true,
             titleProvider: 'ollama',
-            titleModel: 'gemma3:1b'
+            titleModel: 'gemma3:1b',
+            titleEnabled: true,
+            summarizationEnabled: true,
+            systemPrompt: ''
         };
     }
 

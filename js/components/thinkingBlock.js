@@ -19,7 +19,10 @@ export function createThinkingBlock(content, collapsed = true) {
     header.className = 'thinking-header';
     header.innerHTML = `
         <span class="thinking-label">Thinking...</span>
-        <span class="thinking-toggle"><i data-lucide="${collapsed ? 'chevron-right' : 'chevron-down'}" class="icon"></i></span>
+        <span class="thinking-actions">
+            <button class="thinking-copy-btn" title="Copy thinking" aria-label="Copy thinking"><i data-lucide="copy" class="icon"></i></button>
+            <span class="thinking-toggle"><i data-lucide="${collapsed ? 'chevron-right' : 'chevron-down'}" class="icon"></i></span>
+        </span>
     `;
 
     const body = document.createElement('div');
@@ -37,12 +40,29 @@ export function createThinkingBlock(content, collapsed = true) {
         body._userScrolledUp = !atBottom;
     });
 
+    // Copy handler
+    header.querySelector('.thinking-copy-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const text = body.querySelector('.thinking-content')?.innerText || '';
+        navigator.clipboard.writeText(text).then(() => {
+            const icon = header.querySelector('.thinking-copy-btn .icon');
+            if (icon) {
+                icon.setAttribute('data-lucide', 'check');
+                refreshIcons();
+                setTimeout(() => {
+                    icon.setAttribute('data-lucide', 'copy');
+                    refreshIcons();
+                }, 1500);
+            }
+        });
+    });
+
     // Toggle handler
     header.addEventListener('click', () => {
         const isCollapsed = wrapper.classList.toggle('collapsed');
         const toggle = header.querySelector('.thinking-toggle');
         toggle.innerHTML = `<i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="icon"></i>`;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
 
         // Save preference
         const settings = storageService.loadSettings();

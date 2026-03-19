@@ -4,6 +4,7 @@
 
 import { eventBus, Events } from '../utils/eventBus.js?v=34';
 import { chatService } from '../services/chatService.js?v=34';
+import { storageService } from '../services/storageService.js?v=34';
 import { toast } from './toast.js?v=34';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB hard reject
@@ -16,6 +17,9 @@ class InputArea {
         this.isStreaming = false;
         this.supportsVision = false;
         this.pendingImages = [];
+        this.webSearchEnabled = false;
+        this.webSearchConfigured = false;
+        this.modelSupportsTools = true;
 
         this.init();
     }
@@ -24,6 +28,50 @@ class InputArea {
         this.render();
         this.attachEvents();
         this.listenToEvents();
+        this.updateWebSearchAvailability();
+    }
+
+    isWebSearchConfigured() {
+        const settings = storageService.loadSettings();
+        const provider = settings.searchProvider || 'searxng';
+        if (provider === 'brave') {
+            return !!settings.braveApiKey;
+        }
+        // SearXNG — configured if a URL is set (or using default)
+        return true;
+    }
+
+    updateWebSearchAvailability() {
+        this.webSearchConfigured = this.isWebSearchConfigured();
+        const webSearchBtn = document.getElementById('web-search-btn');
+        if (!webSearchBtn) return;
+
+        // Hide completely if model doesn't support tools
+        if (!this.modelSupportsTools) {
+            webSearchBtn.classList.add('hidden');
+            if (this.webSearchEnabled) {
+                this.webSearchEnabled = false;
+                webSearchBtn.classList.remove('active');
+                eventBus.emit(Events.WEB_SEARCH_TOGGLED, { enabled: false });
+            }
+            return;
+        }
+
+        webSearchBtn.classList.remove('hidden');
+
+        // Gray out if search isn't configured
+        if (!this.webSearchConfigured) {
+            webSearchBtn.classList.add('disabled');
+            webSearchBtn.title = 'Web search not configured — set up in Settings';
+            if (this.webSearchEnabled) {
+                this.webSearchEnabled = false;
+                webSearchBtn.classList.remove('active');
+                eventBus.emit(Events.WEB_SEARCH_TOGGLED, { enabled: false });
+            }
+        } else {
+            webSearchBtn.classList.remove('disabled');
+            webSearchBtn.title = 'Toggle web search';
+        }
     }
 
     render() {
@@ -32,7 +80,10 @@ class InputArea {
                 <div id="image-preview-strip" class="image-preview-strip hidden"></div>
                 <div class="input-wrapper">
                     <input type="file" id="image-file-input" accept="image/*" multiple class="hidden">
-                    <button id="attach-image-btn" class="attach-image-btn hidden" title="Attach image">
+                    <button id="web-search-btn" class="web-search-btn" title="Toggle web search" aria-label="Toggle web search">
+                        <i data-lucide="globe" class="icon"></i>
+                    </button>
+                    <button id="attach-image-btn" class="attach-image-btn hidden" title="Attach image" aria-label="Attach image">
                         <i data-lucide="image-plus" class="icon"></i>
                     </button>
                     <textarea
@@ -41,10 +92,10 @@ class InputArea {
                         placeholder="Enter your message..."
                         rows="1"
                     ></textarea>
-                    <button id="send-btn" class="send-btn" title="Send message">
+                    <button id="send-btn" class="send-btn" title="Send message" aria-label="Send message">
                         <i data-lucide="arrow-up" class="icon"></i>
                     </button>
-                    <button id="stop-btn" class="stop-btn hidden" title="Stop generation">
+                    <button id="stop-btn" class="stop-btn hidden" title="Stop generation" aria-label="Stop generation">
                         <i data-lucide="square" class="icon"></i>
                     </button>
                 </div>
@@ -56,7 +107,7 @@ class InputArea {
 
         // Initialize Lucide icons
         if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+            refreshIcons();
         }
     }
 
@@ -103,6 +154,18 @@ class InputArea {
             eventBus.emit(Events.STREAM_END, { aborted: true });
         });
 
+        // Web search toggle
+        const webSearchBtn = document.getElementById('web-search-btn');
+        webSearchBtn.addEventListener('click', () => {
+            if (webSearchBtn.classList.contains('disabled')) {
+                toast.warning('Web search not configured. Set it up in Settings → Web Search.');
+                return;
+            }
+            this.webSearchEnabled = !this.webSearchEnabled;
+            webSearchBtn.classList.toggle('active', this.webSearchEnabled);
+            eventBus.emit(Events.WEB_SEARCH_TOGGLED, { enabled: this.webSearchEnabled });
+        });
+
         // Attach image button
         attachBtn.addEventListener('click', () => {
             fileInput.click();
@@ -145,6 +208,15 @@ class InputArea {
         // When switching chats, sync streaming state to the new chat
         eventBus.on(Events.STREAM_STATUS_CHANGED, ({ streaming }) => {
             this.setStreaming(streaming);
+        });
+
+        eventBus.on(Events.TOOLS_CAPABILITY_CHANGED, ({ supportsTools }) => {
+            this.modelSupportsTools = supportsTools;
+            this.updateWebSearchAvailability();
+        });
+
+        eventBus.on(Events.SETTINGS_UPDATED, () => {
+            this.updateWebSearchAvailability();
         });
 
         eventBus.on(Events.VISION_CAPABILITY_CHANGED, ({ supportsVision }) => {
@@ -242,7 +314,7 @@ class InputArea {
         strip.innerHTML = this.pendingImages.map((img, i) => `
             <div class="image-preview-item">
                 <img src="${img}" alt="Attached image ${i + 1}">
-                <button class="image-remove-btn" data-index="${i}" title="Remove image"><i data-lucide="x" class="icon"></i></button>
+                <button class="image-remove-btn" data-index="${i}" title="Remove image" aria-label="Remove image"><i data-lucide="x" class="icon"></i></button>
             </div>
         `).join('');
 
@@ -254,7 +326,7 @@ class InputArea {
             });
         });
 
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        refreshIcons();
     }
 
     setStreaming(isStreaming) {

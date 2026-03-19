@@ -5,6 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Synapse - Chat with local AI models using Ollama">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;
+                   style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
+                   font-src https://fonts.gstatic.com;
+                   img-src 'self' data: blob:;
+                   connect-src *;">
     <title>Synapse - Local AI Chat</title>
 
     <!-- Fonts -->
@@ -41,11 +48,15 @@
         <aside id="sidebar-container">
             <!-- ChatSidebar component renders here -->
         </aside>
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
         <!-- Main Content -->
         <main class="main-content">
             <!-- Header -->
             <header class="header">
+                <button id="hamburger-btn" class="hamburger-btn" title="Open sidebar" aria-label="Open sidebar">
+                    <i data-lucide="menu" class="icon"></i>
+                </button>
                 <div id="model-selector-container">
                     <!-- ModelSelector component renders here -->
                 </div>
@@ -74,78 +85,8 @@
         </main>
     </div>
 
-    <!-- Global Utilities -->
-    <script>
-        // Copy code block content
-        window.copyCodeBlock = async function (btn) {
-            const container = btn.closest('.code-block-container');
-            const encodedCode = container.dataset.code;
-            const code = decodeURIComponent(atob(encodedCode));
-
-            try {
-                await navigator.clipboard.writeText(code);
-                btn.innerHTML = '<i data-lucide="check" class="icon"></i> Copied!';
-                btn.classList.add('success');
-                lucide.createIcons();
-                setTimeout(() => {
-                    btn.innerHTML = '<i data-lucide="copy" class="icon"></i> Copy';
-                    btn.classList.remove('success');
-                    lucide.createIcons();
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        };
-
-        // Copy message content
-        window.copyMessageContent = async function (btn) {
-            const message = btn.closest('.message');
-            const content = message.querySelector('.message-content');
-            const text = content.innerText || content.textContent;
-
-            try {
-                await navigator.clipboard.writeText(text);
-                btn.innerHTML = '<i data-lucide="check" class="icon"></i>';
-                btn.classList.add('success');
-                lucide.createIcons();
-                setTimeout(() => {
-                    btn.innerHTML = '<i data-lucide="copy" class="icon"></i>';
-                    btn.classList.remove('success');
-                    lucide.createIcons();
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        };
-
-        // Resend last user message
-        window.resendMessage = function (btn) {
-            const message = btn.closest('.message');
-            const content = message.querySelector('.message-content');
-            const text = content.innerText || content.textContent;
-            window.dispatchEvent(new CustomEvent('resend-message', { detail: { content: text } }));
-        };
-
-        // Edit user message
-        window.editMessage = function (index) {
-            window.dispatchEvent(new CustomEvent('edit-message', { detail: { index } }));
-        };
-
-        // Save edited message
-        window.saveEditMessage = function (index) {
-            window.dispatchEvent(new CustomEvent('save-edit-message', { detail: { index } }));
-        };
-
-        // Cancel edit
-        window.cancelEditMessage = function (index) {
-            window.dispatchEvent(new CustomEvent('cancel-edit-message', { detail: { index } }));
-        };
-
-        // Regenerate from here
-        window.regenerateFromHere = function (index) {
-            window.dispatchEvent(new CustomEvent('regenerate-from-here', { detail: { index } }));
-        };
-    </script>
+    <!-- Global Utilities (extracted for CSP compliance) -->
+    <script src="js/globals.js?v=1"></script>
 
     <!-- App Script -->
     <script type="module" src="js/app.js?v=32"></script>
