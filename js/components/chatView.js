@@ -2,17 +2,17 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=34';
-import { contextService } from '../services/contextService.js?v=34';
-import { storageService } from '../services/storageService.js?v=34';
-import { providerManager } from '../services/providerManager.js?v=34';
-import { titleService } from '../services/titleService.js?v=34';
-import { toolRegistry } from '../services/toolRegistry.js?v=34';
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
-import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js?v=34';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=34';
-import { getModelParams } from './settingsPanel.js?v=34';
-import { toast } from './toast.js?v=34';
+import { chatService } from '../services/chatService.js?v=35';
+import { contextService } from '../services/contextService.js?v=35';
+import { storageService } from '../services/storageService.js?v=35';
+import { providerManager } from '../services/providerManager.js?v=35';
+import { titleService } from '../services/titleService.js?v=35';
+import { toolRegistry } from '../services/toolRegistry.js?v=35';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js?v=35';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=35';
+import { getModelParams } from './settingsPanel.js?v=35';
+import { toast } from './toast.js?v=35';
 
 const PROMPT_EXAMPLES = [
     { icon: '💡', text: 'Explain quantum computing in simple terms' },
@@ -392,7 +392,14 @@ class ChatView {
                 streamState.contentEl.innerHTML = '<span class="waiting-hint"><span class="blink-dot">●</span> Waiting for model...</span>';
             }
 
-            const tools = this.webSearchEnabled ? toolRegistry.getSchemas() : [];
+            // Build tool list: builtins from settings, web search from toggle
+            const enabledCategories = [];
+            const settings = storageService.loadSettings();
+            if (settings.toolsEnabled !== false) enabledCategories.push('builtin');
+            if (this.webSearchEnabled) enabledCategories.push('web_search');
+            const tools = enabledCategories.length > 0
+                ? toolRegistry.getSchemas({ categories: enabledCategories })
+                : [];
             const MAX_TOOL_ITERATIONS = 5;
             let finalResult = null;
 

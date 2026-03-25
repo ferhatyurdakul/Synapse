@@ -40,19 +40,23 @@ class ToolRegistry {
     /**
      * Returns tool schemas in OpenAI function-calling format.
      * Only tools with a `parameters` schema are included.
+     * @param {Object} [filter] - Optional filter
+     * @param {string[]} [filter.categories] - Only include tools in these categories
      * @returns {Array<{type: string, function: Object}>}
      */
-    getSchemas() {
-        return this.getAll()
-            .filter(t => t.parameters)
-            .map(t => ({
-                type: 'function',
-                function: {
-                    name: t.name,
-                    description: t.description,
-                    parameters: t.parameters
-                }
-            }));
+    getSchemas(filter) {
+        let tools = this.getAll().filter(t => t.parameters);
+        if (filter?.categories) {
+            tools = tools.filter(t => filter.categories.includes(t.category || 'builtin'));
+        }
+        return tools.map(t => ({
+            type: 'function',
+            function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters
+            }
+        }));
     }
 
     /**

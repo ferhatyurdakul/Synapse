@@ -3,7 +3,7 @@
  * Each registers itself into the toolRegistry with OpenAI-compatible parameter schemas.
  */
 
-import { toolRegistry } from '../services/toolRegistry.js?v=34';
+import { toolRegistry } from '../services/toolRegistry.js?v=35';
 
 // ─── Calculator ───────────────────────────────────────────────────────────────
 

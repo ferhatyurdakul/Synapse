@@ -1,12 +1,12 @@
 /**
  * ChatService - Manages chat sessions and message history
- * Coordinates between UI, Ollama service, and storage
+ * Coordinates between UI, storage (IndexedDB), and providers
  */
 
-import { storageService } from './storageService.js?v=34';
-import { contextService } from './contextService.js?v=34';
-import { providerManager } from './providerManager.js?v=34';
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
+import { storageService } from './storageService.js?v=35';
+import { contextService } from './contextService.js?v=35';
+import { providerManager } from './providerManager.js?v=35';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
 
 /**
  * Generate unique ID for chats
@@ -34,27 +34,69 @@ class ChatService {
         this.chats = {};
         this.folders = {};
         this.currentChatId = null;
-        this.load();
+        // Do NOT call load() here — app.js will call it after storageService.init()
     }
 
     /**
-     * Load chats and folders from storage
+     * Load chats and folders from IndexedDB.
+     * Must be called once after storageService.init().
      */
-    load() {
-        this.chats = storageService.loadChats();
+    async load() {
+        const chatMetas = await storageService.loadAllChats();
+
+        // Attach messages to each chat (in memory)
+        for (const chatId of Object.keys(chatMetas)) {
+            const messages = await storageService.loadMessagesForChat(chatId);
+            // Hydrate images for the messages (lazy per-chat would be better
+            // for large datasets, but for now hydrate all on load)
+            await storageService.hydrateAttachments(messages);
+            chatMetas[chatId].messages = messages;
+        }
+
+        this.chats = chatMetas;
         this.folders = storageService.loadFolders();
     }
 
+    // ─── Internal persistence helpers ────────────────────────────────────────
+
     /**
-     * Save chats to storage
+     * Persist chat metadata (without messages) to IDB.
+     * Uses write coalescing for rapid successive calls.
+     * @private
      */
-    save() {
-        storageService.saveChats(this.chats);
+    _persistChat(chat) {
+        // Build a metadata-only copy (no messages array)
+        const meta = { ...chat };
+        delete meta.messages;
+        storageService.saveChat(meta);
+    }
+
+    /**
+     * Persist a single message to IDB.
+     * @private
+     */
+    _persistMessage(chatId, message) {
+        // Extract images to attachment store if present
+        if (message.images && message.images.length > 0) {
+            // Build a persistence copy without images (attachmentIds instead)
+            const persistMsg = { ...message };
+            storageService.extractAttachments(chatId, persistMsg).then(() => {
+                // Save the message with attachmentIds (not images)
+                const { images, ...msgForIdb } = persistMsg;
+                storageService.saveMessage(chatId, msgForIdb);
+            }).catch(e => console.error('Failed to persist message attachments:', e));
+        } else {
+            storageService.saveMessage(chatId, message).catch(
+                e => console.error('Failed to persist message:', e)
+            );
+        }
     }
 
     saveFolders() {
         storageService.saveFolders(this.folders);
     }
+
+    // ─── Chat CRUD ───────────────────────────────────────────────────────────
 
     /**
      * Create a new chat session
@@ -78,7 +120,7 @@ class ChatService {
         };
 
         this.currentChatId = id;
-        this.save();
+        this._persistChat(this.chats[id]);
 
         eventBus.emit(Events.CHAT_CREATED, { id, chat: this.chats[id] });
 
@@ -138,12 +180,10 @@ class ChatService {
             timestamp: new Date().toISOString()
         };
 
-        // Persist stats for assistant messages
         if (stats && role === 'assistant') {
             message.stats = stats;
         }
 
-        // Persist images for user messages
         if (images && images.length > 0) {
             message.images = images;
         }
@@ -151,12 +191,12 @@ class ChatService {
         chat.messages.push(message);
         chat.updatedAt = new Date().toISOString();
 
-        // Update title from first user message
         if (chat.title === 'New Chat' && role === 'user') {
             chat.title = generateTitle(content);
         }
 
-        this.save();
+        this._persistMessage(this.currentChatId, message);
+        this._persistChat(chat);
         eventBus.emit(Events.CHAT_UPDATED, { id: this.currentChatId, chat });
 
         return message;
@@ -164,10 +204,6 @@ class ChatService {
 
     /**
      * Add a tool result message to the current chat.
-     * @param {string} toolName - Name of the tool (e.g. 'calc')
-     * @param {string} input    - Arguments JSON string
-     * @param {string} result   - Markdown result string from the tool handler
-     * @returns {number} index of the added message
      */
     addToolMessage(toolName, input, result) {
         return this.addToolMessageToChat(this.currentChatId, toolName, input, result);
@@ -175,11 +211,6 @@ class ChatService {
 
     /**
      * Add a tool result message to a specific chat (for background streams).
-     * @param {string} chatId   - Chat ID
-     * @param {string} toolName - Name of the tool
-     * @param {string} input    - Arguments JSON string
-     * @param {string} result   - Markdown result string
-     * @returns {number} index of the added message
      */
     addToolMessageToChat(chatId, toolName, input, result) {
         if (!chatId || !this.chats[chatId]) throw new Error('No active chat');
@@ -194,15 +225,15 @@ class ChatService {
         };
         chat.messages.push(message);
         chat.updatedAt = new Date().toISOString();
-        this.save();
+
+        this._persistMessage(chatId, message);
+        this._persistChat(chat);
         eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat });
         return chat.messages.length - 1;
     }
 
     /**
      * Update the last assistant message (for streaming)
-     * @param {string} content - Updated content
-     * @param {string} thinking - Updated thinking content
      */
     updateLastAssistantMessage(content, thinking = '') {
         if (!this.currentChatId) return;
@@ -214,15 +245,13 @@ class ChatService {
             lastMessage.content = content;
             lastMessage.thinking = thinking;
             chat.updatedAt = new Date().toISOString();
-            this.save();
+            this._persistMessage(this.currentChatId, lastMessage);
+            this._persistChat(chat);
         }
     }
 
     /**
-     * Get messages formatted for Ollama API, with smart context management
-     * @param {number} maxCtx - Maximum context window size
-     * @param {string} [systemPrompt] - Optional system prompt to prepend
-     * @returns {Promise<{messages: Array<{role: string, content: string}>, summarized: boolean}>}
+     * Get messages formatted for API, with smart context management
      */
     async getMessagesForApi(maxCtx = 4096, systemPrompt = '') {
         const chat = this.getCurrentChat();
@@ -238,8 +267,6 @@ class ChatService {
 
     /**
      * Resolve the system prompt for the current chat.
-     * Priority: folder prompt > global prompt > empty
-     * @returns {string}
      */
     getSystemPrompt() {
         const chat = this.getCurrentChat();
@@ -253,97 +280,97 @@ class ChatService {
 
     /**
      * Store a background-generated summary on a chat
-     * @param {string} chatId
-     * @param {string} summary
-     * @param {number} summarizedUpTo - message index the summary covers up to
      */
     updateSummary(chatId, summary, summarizedUpTo) {
         if (chatId && this.chats[chatId]) {
             this.chats[chatId].summary = summary;
             this.chats[chatId].summarizedUpTo = summarizedUpTo;
-            this.save();
+            this._persistChat(this.chats[chatId]);
         }
     }
 
     /**
      * Update chat title
-     * @param {string} chatId - Chat ID
-     * @param {string} title - New title
      */
     updateChatTitle(chatId, title) {
         if (this.chats[chatId]) {
             this.chats[chatId].title = title;
             this.chats[chatId].updatedAt = new Date().toISOString();
-            this.save();
+            this._persistChat(this.chats[chatId]);
             eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat: this.chats[chatId] });
         }
     }
 
     /**
      * Delete the last message from current chat
-     * Used for regenerating responses
      */
     deleteLastMessage() {
         const chat = this.getCurrentChat();
         if (chat && chat.messages.length > 0) {
-            chat.messages.pop();
+            const removed = chat.messages.pop();
             chat.updatedAt = new Date().toISOString();
-            this.save();
+            // Delete from IDB
+            if (removed?.id) {
+                storageService.deleteMessagesForChat(this.currentChatId).then(() =>
+                    storageService.saveMessages(this.currentChatId, chat.messages)
+                ).catch(e => console.error('Failed to delete message:', e));
+            }
+            this._persistChat(chat);
             eventBus.emit(Events.CHAT_UPDATED, { id: this.currentChatId, chat });
         }
     }
 
     /**
      * Truncate messages from a given index onwards (inclusive)
-     * Used for "regenerate from here" and "edit + resend"
-     * @param {number} fromIndex - Index to truncate from
      */
     truncateFromMessage(fromIndex) {
         const chat = this.getCurrentChat();
         if (chat && fromIndex >= 0 && fromIndex < chat.messages.length) {
             chat.messages = chat.messages.slice(0, fromIndex);
             chat.updatedAt = new Date().toISOString();
-            this.save();
+            // Rewrite all messages for this chat in IDB
+            storageService.deleteMessagesForChat(this.currentChatId).then(() =>
+                storageService.saveMessages(this.currentChatId, chat.messages)
+            ).catch(e => console.error('Failed to truncate messages:', e));
+            this._persistChat(chat);
             eventBus.emit(Events.CHAT_UPDATED, { id: this.currentChatId, chat });
         }
     }
 
     /**
      * Update message content at a specific index
-     * @param {number} index - Message index
-     * @param {string} content - New content
      */
     updateMessage(index, content) {
         const chat = this.getCurrentChat();
         if (chat && index >= 0 && index < chat.messages.length) {
             chat.messages[index].content = content;
             chat.updatedAt = new Date().toISOString();
-            this.save();
+            this._persistMessage(this.currentChatId, chat.messages[index]);
+            this._persistChat(chat);
         }
     }
 
     /**
      * Delete a chat
-     * @param {string} chatId - Chat ID to delete
      */
     deleteChat(chatId) {
         if (this.chats[chatId]) {
             delete this.chats[chatId];
 
             if (this.currentChatId === chatId) {
-                // Select another chat or set to null
                 const remainingIds = Object.keys(this.chats);
                 this.currentChatId = remainingIds.length > 0 ? remainingIds[0] : null;
             }
 
-            this.save();
+            storageService.deleteChat(chatId).catch(
+                e => console.error('Failed to delete chat:', e)
+            );
             eventBus.emit(Events.CHAT_DELETED, { id: chatId });
         }
     }
 
     /**
      * Get all chats sorted by last updated
-     * @returns {Array}
      */
     getAllChats() {
         return Object.values(this.chats).sort(
@@ -358,15 +385,14 @@ class ChatService {
         this.chats = {};
         this.folders = {};
         this.currentChatId = null;
-        this.save();
-        this.saveFolders();
+        storageService.clearChats().catch(
+            e => console.error('Failed to clear chats:', e)
+        );
         eventBus.emit(Events.CHAT_DELETED, { id: null, all: true });
     }
 
     /**
      * Export a specific chat as JSON
-     * @param {string} chatId - Chat ID to export
-     * @returns {string}
      */
     exportChat(chatId) {
         const chat = this.chats[chatId];
@@ -376,7 +402,6 @@ class ChatService {
 
     /**
      * Export all chats as JSON
-     * @returns {string}
      */
     exportAllChats() {
         return storageService.exportChats();
@@ -384,26 +409,24 @@ class ChatService {
 
     /**
      * Import chats from JSON
-     * @param {string} jsonString - JSON string of chats
      */
-    importChats(jsonString) {
-        this.chats = storageService.importChats(jsonString, true);
+    async importChats(jsonString) {
+        this.chats = await storageService.importChats(jsonString, true);
         eventBus.emit(Events.CHATS_IMPORTED, { chats: this.chats });
     }
 
     /**
      * Update model for current chat
-     * @param {string} model - New model name
      */
     updateModel(model) {
         if (this.currentChatId && this.chats[this.currentChatId]) {
             this.chats[this.currentChatId].model = model;
-            this.save();
+            this._persistChat(this.chats[this.currentChatId]);
         }
     }
+
     /**
      * Update last token count for current chat
-     * @param {number} tokenCount - Actual token count from Ollama
      */
     updateTokenCount(tokenCount) {
         this.updateTokenCountForChat(this.currentChatId, tokenCount);
@@ -411,20 +434,16 @@ class ChatService {
 
     /**
      * Update last token count for a specific chat
-     * @param {string} chatId - Chat ID
-     * @param {number} tokenCount - Actual token count
      */
     updateTokenCountForChat(chatId, tokenCount) {
         if (chatId && this.chats[chatId]) {
             this.chats[chatId].lastTokenCount = tokenCount;
-            this.save();
+            this._persistChat(this.chats[chatId]);
         }
     }
 
     /**
      * Save context meter data for current chat
-     * @param {number} used - Tokens used
-     * @param {number} max - Max context tokens
      */
     updateContextData(used, max) {
         this.updateContextDataForChat(this.currentChatId, used, max);
@@ -432,26 +451,16 @@ class ChatService {
 
     /**
      * Save context meter data for a specific chat
-     * @param {string} chatId - Chat ID
-     * @param {number} used - Tokens used
-     * @param {number} max - Max context tokens
      */
     updateContextDataForChat(chatId, used, max) {
         if (chatId && this.chats[chatId]) {
             this.chats[chatId].contextData = { used, max };
-            this.save();
+            this._persistChat(this.chats[chatId]);
         }
     }
 
     /**
      * Add a message to a specific chat (for background streams)
-     * @param {string} chatId - Chat ID to add message to
-     * @param {string} role - 'user' or 'assistant'
-     * @param {string} content - Message content
-     * @param {string} thinking - Optional thinking content
-     * @param {Object} stats - Optional message stats
-     * @param {Array<string>} images - Optional array of base64 data URL images
-     * @returns {Object} The added message
      */
     addMessageToChat(chatId, role, content, thinking = '', stats = null, images = null) {
         if (!chatId || !this.chats[chatId]) {
@@ -482,7 +491,8 @@ class ChatService {
             chat.title = generateTitle(content);
         }
 
-        this.save();
+        this._persistMessage(chatId, message);
+        this._persistChat(chat);
         eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat });
 
         return message;
@@ -490,8 +500,6 @@ class ChatService {
 
     /**
      * Get a chat by ID
-     * @param {string} chatId - Chat ID
-     * @returns {Object|null}
      */
     getChat(chatId) {
         return this.chats[chatId] || null;
@@ -533,14 +541,13 @@ class ChatService {
 
     deleteFolder(folderId) {
         if (!this.folders[folderId]) return;
-        // Unassign all chats in this folder
         for (const chat of Object.values(this.chats)) {
             if (chat.folderId === folderId) {
                 delete chat.folderId;
+                this._persistChat(chat);
             }
         }
         delete this.folders[folderId];
-        this.save();
         this.saveFolders();
         eventBus.emit(Events.CHAT_UPDATED);
     }
@@ -567,7 +574,7 @@ class ChatService {
         } else {
             delete this.chats[chatId].folderId;
         }
-        this.save();
+        this._persistChat(this.chats[chatId]);
         eventBus.emit(Events.CHAT_UPDATED);
     }
 }

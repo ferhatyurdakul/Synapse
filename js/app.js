@@ -3,17 +3,19 @@
  * Initializes and coordinates all components
  */
 
-import { createModelSelector } from './components/modelSelector.js?v=34';
-import { createChatSidebar } from './components/chatSidebar.js?v=34';
-import { createChatView } from './components/chatView.js?v=34';
-import { createInputArea } from './components/inputArea.js?v=34';
-import { createSettingsPanel } from './components/settingsPanel.js?v=34';
-import { createContextMeter } from './components/contextMeter.js?v=34';
-import { providerManager } from './services/providerManager.js?v=34';
-import { eventBus, Events } from './utils/eventBus.js?v=34';
-import { toast } from './components/toast.js?v=34';
-import './tools/builtins.js?v=34'; // registers built-in tools into toolRegistry
-import './tools/webSearch.js?v=34'; // registers web search tool
+import { createModelSelector } from './components/modelSelector.js?v=35';
+import { createChatSidebar } from './components/chatSidebar.js?v=35';
+import { createChatView } from './components/chatView.js?v=35';
+import { createInputArea } from './components/inputArea.js?v=35';
+import { createSettingsPanel } from './components/settingsPanel.js?v=35';
+import { createContextMeter } from './components/contextMeter.js?v=35';
+import { storageService } from './services/storageService.js?v=35';
+import { chatService } from './services/chatService.js?v=35';
+import { providerManager } from './services/providerManager.js?v=35';
+import { eventBus, Events } from './utils/eventBus.js?v=35';
+import { toast } from './components/toast.js?v=35';
+import './tools/builtins.js?v=35'; // registers built-in tools into toolRegistry
+import './tools/webSearch.js?v=35'; // registers web search tool
 
 class App {
     constructor() {
@@ -26,6 +28,11 @@ class App {
 
     async init() {
         console.log('Initializing Synapse...');
+
+        // Initialize storage (IndexedDB + migration from localStorage)
+        await storageService.init();
+        providerManager.reload(); // re-read saved provider settings from IDB cache
+        await chatService.load();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();
@@ -99,6 +106,11 @@ class App {
         // Storage quota exceeded
         window.addEventListener('synapse:quotaExceeded', () => {
             toast.error('Storage full. Export your chats and delete old ones to free space.');
+        });
+
+        // Storage migration failure
+        window.addEventListener('synapse:migrationFailed', () => {
+            toast.error('Failed to migrate data to IndexedDB. Some data may be unavailable.');
         });
 
         // Keyboard shortcuts

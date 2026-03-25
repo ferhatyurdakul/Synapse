@@ -3,12 +3,12 @@
  * Supports per-model parameter configuration with multi-provider support
  */
 
-import { titleService } from '../services/titleService.js?v=34';
-import { contextService } from '../services/contextService.js?v=34';
-import { providerManager } from '../services/providerManager.js?v=34';
-import { storageService } from '../services/storageService.js?v=34';
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
-import { toast } from './toast.js?v=34';
+import { titleService } from '../services/titleService.js?v=35';
+import { contextService } from '../services/contextService.js?v=35';
+import { providerManager } from '../services/providerManager.js?v=35';
+import { storageService } from '../services/storageService.js?v=35';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { toast } from './toast.js?v=35';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -31,7 +31,8 @@ const PARAM_DEFS = {
 const TABS = [
     { id: 'general', label: 'General', icon: 'sliders-horizontal' },
     { id: 'models', label: 'Models', icon: 'brain' },
-    { id: 'tools', label: 'Tools', icon: 'wrench' }
+    { id: 'tools', label: 'Tools', icon: 'wrench' },
+    { id: 'storage', label: 'Storage', icon: 'database' }
 ];
 
 class SettingsPanel {
@@ -191,8 +192,21 @@ class SettingsPanel {
                     <!-- Tools Tab -->
                     <div class="settings-page" data-page="tools">
                         <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Built-in Tools</h3>
+                                    <p class="settings-description">Calculator, date/time, and unit converter. Models can call these during a conversation.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="tools-enabled-toggle" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
                             <h3>Web Search</h3>
-                            <p class="settings-description">Enable web search as a tool. Models can call it to look up current information.</p>
+                            <p class="settings-description">Enable web search as a tool. Toggled on/off per chat with the globe button.</p>
                             <div class="settings-field">
                                 <label for="search-provider-select">Search Provider</label>
                                 <select id="search-provider-select" class="settings-select">
@@ -225,6 +239,39 @@ class SettingsPanel {
                                     </div>
                                     <p class="settings-hint">Requires <code>python3 server.py</code> as the dev server (CORS proxy).</p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Storage Tab -->
+                    <div class="settings-page" data-page="storage">
+                        <div class="settings-section">
+                            <h3>Storage Usage</h3>
+                            <p class="settings-description">Data is stored in your browser's IndexedDB. No data leaves your machine.</p>
+                            <div class="storage-stats" id="storage-stats">
+                                <div class="storage-bar-container">
+                                    <div class="storage-bar" id="storage-bar" style="width: 0%"></div>
+                                </div>
+                                <p class="storage-info" id="storage-info">Calculating...</p>
+                                <div class="storage-counts" id="storage-counts"></div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>Cleanup</h3>
+                            <p class="settings-description">Free up storage space by removing old data.</p>
+                            <div class="settings-field">
+                                <label for="cleanup-days-input">Delete chats older than</label>
+                                <div class="cleanup-row">
+                                    <input type="number" id="cleanup-days-input" class="settings-input" value="90" min="1" max="3650" style="width: 80px">
+                                    <span>days</span>
+                                    <button class="settings-btn" id="cleanup-old-chats-btn">Delete</button>
+                                </div>
+                            </div>
+                            <div class="settings-field">
+                                <button class="settings-btn danger" id="clear-all-data-btn">
+                                    <i data-lucide="trash-2" class="icon"></i> Delete All Data
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -271,6 +318,39 @@ class SettingsPanel {
         document.querySelectorAll('.settings-page').forEach(page => {
             page.classList.toggle('active', page.dataset.page === tabId);
         });
+
+        // Refresh storage stats when switching to storage tab
+        if (tabId === 'storage') {
+            this.refreshStorageStats();
+        }
+    }
+
+    async refreshStorageStats() {
+        const info = await storageService.getStorageInfo();
+
+        const bar = document.getElementById('storage-bar');
+        const infoEl = document.getElementById('storage-info');
+        const countsEl = document.getElementById('storage-counts');
+
+        if (!bar || !infoEl) return;
+
+        const usedMB = (info.used / (1024 * 1024)).toFixed(1);
+        const quotaMB = (info.quota / (1024 * 1024)).toFixed(0);
+        const pct = info.quota > 0 ? Math.min(100, (info.used / info.quota) * 100) : 0;
+
+        bar.style.width = pct.toFixed(1) + '%';
+        bar.classList.toggle('warning', pct > 75);
+        bar.classList.toggle('danger', pct > 90);
+
+        infoEl.textContent = `${usedMB} MB used of ${quotaMB} MB available`;
+
+        if (countsEl) {
+            countsEl.innerHTML = `
+                <span>${info.chatCount} chat${info.chatCount !== 1 ? 's' : ''}</span>
+                <span>${info.messageCount} message${info.messageCount !== 1 ? 's' : ''}</span>
+                <span>${info.attachmentCount} image${info.attachmentCount !== 1 ? 's' : ''}</span>
+            `;
+        }
     }
 
     attachEventListeners() {
@@ -435,6 +515,40 @@ class SettingsPanel {
                 }
             });
         });
+
+        // Storage tab — cleanup old chats
+        document.getElementById('cleanup-old-chats-btn').addEventListener('click', async () => {
+            const days = parseInt(document.getElementById('cleanup-days-input').value) || 90;
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+
+            const { chatService } = await import('../services/chatService.js?v=35');
+            const allChats = chatService.getAllChats();
+            const oldChats = allChats.filter(c => new Date(c.updatedAt) < cutoff);
+
+            if (oldChats.length === 0) {
+                toast.info('No chats older than ' + days + ' days');
+                return;
+            }
+
+            if (!confirm(`Delete ${oldChats.length} chat(s) older than ${days} days?`)) return;
+
+            for (const chat of oldChats) {
+                chatService.deleteChat(chat.id);
+            }
+            toast.success(`Deleted ${oldChats.length} old chat(s)`);
+            this.refreshStorageStats();
+        });
+
+        // Storage tab — clear all data
+        document.getElementById('clear-all-data-btn').addEventListener('click', async () => {
+            if (!confirm('Delete ALL chats, settings, and data? This cannot be undone.')) return;
+
+            const { chatService } = await import('../services/chatService.js?v=35');
+            chatService.deleteAllChats();
+            toast.success('All data deleted');
+            this.refreshStorageStats();
+        });
     }
 
     async open() {
@@ -442,6 +556,9 @@ class SettingsPanel {
         document.getElementById('settings-modal').classList.remove('hidden');
 
         const settings = storageService.loadSettings();
+
+        // Load tools toggle
+        document.getElementById('tools-enabled-toggle').checked = settings.toolsEnabled !== false;
 
         // Load web search settings
         const searchProvider = settings.searchProvider || 'searxng';
@@ -605,14 +722,13 @@ class SettingsPanel {
 
 
     getAllModelSettings() {
-        const stored = localStorage.getItem('synapse_model_settings');
-        return stored ? JSON.parse(stored) : {};
+        return storageService.loadModelSettings();
     }
 
     saveModelSettings(modelName, settings) {
         const allSettings = this.getAllModelSettings();
         allSettings[modelName] = settings;
-        localStorage.setItem('synapse_model_settings', JSON.stringify(allSettings));
+        storageService.saveModelSettings(allSettings);
     }
 
     resetParams() {
@@ -682,6 +798,7 @@ class SettingsPanel {
             const settings = storageService.loadSettings();
             const sysPromptInput = document.getElementById('system-prompt-input');
             if (sysPromptInput) settings.systemPrompt = sysPromptInput.value.trim();
+            settings.toolsEnabled = document.getElementById('tools-enabled-toggle').checked;
             settings.titleEnabled = document.getElementById('title-enabled-toggle').checked;
             settings.summarizationEnabled = document.getElementById('summ-enabled-toggle').checked;
             settings.searchProvider = document.getElementById('search-provider-select').value;
@@ -725,7 +842,6 @@ export function openSettings() {
  * @returns {Object} Parameters object
  */
 export function getModelParams(modelName) {
-    const stored = localStorage.getItem('synapse_model_settings');
-    const allSettings = stored ? JSON.parse(stored) : {};
+    const allSettings = storageService.loadModelSettings();
     return allSettings[modelName] || { ...DEFAULT_PARAMS };
 }

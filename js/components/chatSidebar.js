@@ -3,12 +3,13 @@
  * Handles chat list, new chat, import/export
  */
 
-import { chatService } from '../services/chatService.js?v=34';
-import { providerManager } from '../services/providerManager.js?v=34';
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
-import { openSettings } from './settingsPanel.js?v=34';
-import { renderMarkdown, escapeHtml } from '../utils/markdown.js?v=34';
-import { toast } from './toast.js?v=34';
+import { chatService } from '../services/chatService.js?v=35';
+import { storageService } from '../services/storageService.js?v=35';
+import { providerManager } from '../services/providerManager.js?v=35';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { openSettings } from './settingsPanel.js?v=35';
+import { renderMarkdown, escapeHtml } from '../utils/markdown.js?v=35';
+import { toast } from './toast.js?v=35';
 
 class ChatSidebar {
     constructor(containerId) {
@@ -24,7 +25,7 @@ class ChatSidebar {
             containsCode: false,
             containsMath: false
         };
-        this.collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+        this.collapsed = storageService.loadSidebarState();
 
         this.init();
     }
@@ -316,7 +317,7 @@ class ChatSidebar {
 
     toggleSidebar() {
         this.collapsed = !this.collapsed;
-        localStorage.setItem('sidebar-collapsed', this.collapsed);
+        storageService.saveSidebarState(this.collapsed);
 
         const sidebar = this.container.querySelector('.sidebar');
         const toggleBtn = document.getElementById('sidebar-toggle-btn');
@@ -675,9 +676,9 @@ class ChatSidebar {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             try {
-                chatService.importChats(event.target.result);
+                await chatService.importChats(event.target.result);
                 toast.success(`Chats imported successfully`);
             } catch (error) {
                 console.error('Failed to import chats:', error.message);

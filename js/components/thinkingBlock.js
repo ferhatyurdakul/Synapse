@@ -2,8 +2,8 @@
  * ThinkingBlock - Collapsible component for AI thinking/reasoning content
  */
 
-import { storageService } from '../services/storageService.js?v=34';
-import { renderMarkdown } from '../utils/markdown.js?v=34';
+import { storageService } from '../services/storageService.js?v=35';
+import { renderMarkdown } from '../utils/markdown.js?v=35';
 
 /**
  * Create a thinking block element

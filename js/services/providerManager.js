@@ -3,10 +3,10 @@
  * Acts as a single entry point for provider-related operations
  */
 
-import { ollamaService } from './ollamaService.js?v=34';
-import { lmStudioService } from './lmStudioService.js?v=34';
-import { storageService } from './storageService.js?v=34';
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
+import { ollamaService } from './ollamaService.js?v=35';
+import { lmStudioService } from './lmStudioService.js?v=35';
+import { storageService } from './storageService.js?v=35';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
 
 const PROVIDERS = {
     ollama: {
@@ -25,10 +25,18 @@ const PROVIDERS = {
 
 class ProviderManager {
     constructor() {
+        this.currentProvider = 'ollama';
+        this._applySettings();
+    }
+
+    /**
+     * Re-read settings and apply provider config.
+     * Called after storageService.init() to pick up saved settings.
+     */
+    _applySettings() {
         const settings = storageService.loadSettings();
         this.currentProvider = settings.selectedProvider || 'ollama';
 
-        // Apply saved provider URLs
         if (settings.providerUrls) {
             for (const [name, url] of Object.entries(settings.providerUrls)) {
                 if (PROVIDERS[name] && url) {
@@ -36,6 +44,13 @@ class ProviderManager {
                 }
             }
         }
+    }
+
+    /**
+     * Reload settings from storage. Call after storageService.init().
+     */
+    reload() {
+        this._applySettings();
     }
 
     /**

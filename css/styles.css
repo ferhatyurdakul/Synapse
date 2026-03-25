@@ -2309,6 +2309,66 @@ body::before {
     color: var(--text-primary);
 }
 
+.settings-btn.danger {
+    background: transparent;
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+}
+
+.settings-btn.danger:hover {
+    background: var(--accent-red);
+    color: var(--bg-primary);
+}
+
+/* Storage Stats */
+.storage-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.storage-bar {
+    height: 100%;
+    background: var(--accent-cyan);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.storage-bar.warning {
+    background: var(--accent-yellow);
+}
+
+.storage-bar.danger {
+    background: var(--accent-red);
+}
+
+.storage-info {
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+    margin: 0 0 8px 0;
+}
+
+.storage-counts {
+    display: flex;
+    gap: 16px;
+    font-size: var(--font-xs);
+    color: var(--text-muted);
+}
+
+.cleanup-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cleanup-row span {
+    color: var(--text-secondary);
+    font-size: var(--font-sm);
+}
+
 /* Slider Styles */
 .settings-sliders {
     display: flex;

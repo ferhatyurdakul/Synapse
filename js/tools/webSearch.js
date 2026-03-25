@@ -9,8 +9,8 @@
  *    Start with: python3 server.py [port]
  */
 
-import { toolRegistry } from '../services/toolRegistry.js?v=34';
-import { storageService } from '../services/storageService.js?v=34';
+import { toolRegistry } from '../services/toolRegistry.js?v=35';
+import { storageService } from '../services/storageService.js?v=35';
 
 const MAX_RESULTS = 5;
 const DEFAULT_SEARXNG_URL = 'http://localhost:8888';
@@ -124,6 +124,7 @@ async function handleWebSearch({ query }) {
 
 toolRegistry.register({
     name: 'web_search',
+    category: 'web_search',
     description: 'Search the web for current information. Use this when the user asks about recent events, facts you are unsure about, or anything that would benefit from up-to-date web results.',
     parameters: {
         type: 'object',

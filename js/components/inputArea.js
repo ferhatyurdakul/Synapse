@@ -2,10 +2,10 @@
  * InputArea - User input component with send functionality
  */
 
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
-import { chatService } from '../services/chatService.js?v=34';
-import { storageService } from '../services/storageService.js?v=34';
-import { toast } from './toast.js?v=34';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { chatService } from '../services/chatService.js?v=35';
+import { storageService } from '../services/storageService.js?v=35';
+import { toast } from './toast.js?v=35';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB hard reject
 const MAX_IMAGE_PX = 1920;                // longest side after downscale

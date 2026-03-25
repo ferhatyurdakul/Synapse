@@ -3,12 +3,12 @@
  * Shows load state indicators for LM Studio models and triggers model loading
  */
 
-import { providerManager } from '../services/providerManager.js?v=34';
-import { chatService } from '../services/chatService.js?v=34';
-import { storageService } from '../services/storageService.js?v=34';
-import { eventBus, Events } from '../utils/eventBus.js?v=34';
-import { toast } from './toast.js?v=34';
-import { getModelParams } from './settingsPanel.js?v=34';
+import { providerManager } from '../services/providerManager.js?v=35';
+import { chatService } from '../services/chatService.js?v=35';
+import { storageService } from '../services/storageService.js?v=35';
+import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { toast } from './toast.js?v=35';
+import { getModelParams } from './settingsPanel.js?v=35';
 
 class ModelSelector {
     constructor(containerId) {
