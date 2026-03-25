@@ -259,19 +259,14 @@ class SettingsPanel {
 
                         <div class="settings-section">
                             <h3>Cleanup</h3>
-                            <p class="settings-description">Free up storage space by removing old data.</p>
+                            <p class="settings-description">Free up storage space by removing old chats.</p>
                             <div class="settings-field">
                                 <label for="cleanup-days-input">Delete chats older than</label>
                                 <div class="cleanup-row">
-                                    <input type="number" id="cleanup-days-input" class="settings-input" value="90" min="1" max="3650" style="width: 80px">
+                                    <input type="number" id="cleanup-days-input" class="settings-input cleanup-input" value="90" min="1" max="3650">
                                     <span>days</span>
-                                    <button class="settings-btn" id="cleanup-old-chats-btn">Delete</button>
+                                    <button class="settings-btn secondary cleanup-btn" id="cleanup-old-chats-btn">Delete</button>
                                 </div>
-                            </div>
-                            <div class="settings-field">
-                                <button class="settings-btn danger" id="clear-all-data-btn">
-                                    <i data-lucide="trash-2" class="icon"></i> Delete All Data
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -540,15 +535,6 @@ class SettingsPanel {
             this.refreshStorageStats();
         });
 
-        // Storage tab — clear all data
-        document.getElementById('clear-all-data-btn').addEventListener('click', async () => {
-            if (!confirm('Delete ALL chats, settings, and data? This cannot be undone.')) return;
-
-            const { chatService } = await import('../services/chatService.js?v=35');
-            chatService.deleteAllChats();
-            toast.success('All data deleted');
-            this.refreshStorageStats();
-        });
     }
 
     async open() {
