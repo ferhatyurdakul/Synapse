@@ -4,8 +4,8 @@
  * Summarization always runs in the background — never blocks a response.
  */
 
-import { providerManager } from './providerManager.js?v=35';
-import { storageService } from './storageService.js?v=35';
+import { providerManager } from './providerManager.js?v=36';
+import { storageService } from './storageService.js?v=36';
 
 // Summarize when token usage exceeds this fraction of max context
 const SUMMARIZE_THRESHOLD = 0.7;

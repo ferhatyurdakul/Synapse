@@ -557,6 +557,8 @@ body::before {
     align-items: center;
     gap: 4px;
     overflow: hidden;
+    flex: 1;
+    min-width: 0;
 }
 
 .chat-title {
@@ -572,10 +574,14 @@ body::before {
 }
 
 .chat-item-actions {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 1px;
     flex-shrink: 0;
+}
+
+.chat-item:hover .chat-item-actions {
+    display: flex;
 }
 
 .rename-chat-btn,
@@ -586,7 +592,6 @@ body::before {
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 2px;
-    opacity: 0;
     transition: all var(--transition-fast);
     display: flex;
     align-items: center;
@@ -599,10 +604,6 @@ body::before {
     height: 12px;
 }
 
-.chat-item:hover .rename-chat-btn,
-.chat-item:hover .delete-chat-btn {
-    opacity: 1;
-}
 
 .rename-chat-btn:hover {
     color: var(--accent-cyan);
@@ -819,15 +820,10 @@ body::before {
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 2px;
-    opacity: 0;
     transition: all var(--transition-fast);
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.chat-item:hover .move-chat-btn {
-    opacity: 1;
 }
 
 .move-chat-btn:hover {
@@ -973,6 +969,12 @@ body::before {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.model-selector #model-select {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .model-selector label {
@@ -1778,10 +1780,15 @@ body::before {
     border-color: var(--accent-cyan);
 }
 
-.send-btn:hover {
+.send-btn:hover:not(:disabled) {
     background: var(--accent-blue);
     border-color: var(--accent-blue);
     box-shadow: var(--glow-blue);
+}
+
+.send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .stop-btn {
@@ -3004,15 +3011,17 @@ body::before {
     height: 14px;
 }
 
-.image-preview-strip {
+.attachments-strip {
     display: flex;
-    gap: 6px;
-    padding: 6px 0;
+    gap: 8px;
+    padding: 8px 12px;
     overflow-x: auto;
     flex-wrap: nowrap;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.image-preview-strip.hidden {
+.attachments-strip.hidden {
     display: none;
 }
 
@@ -3062,10 +3071,11 @@ body::before {
 }
 
 /* Chat Message Images */
-.message-images {
+.message-attachments {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+    align-items: center;
     margin-bottom: 8px;
 }
 
@@ -3081,6 +3091,37 @@ body::before {
 
 .message-image-thumb:hover {
     border-color: var(--accent-cyan);
+}
+
+.message-doc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: var(--font-xs);
+    color: var(--text-primary);
+}
+
+.message-doc-badge .icon {
+    width: 14px;
+    height: 14px;
+    color: var(--accent-cyan);
+    flex-shrink: 0;
+}
+
+.message-doc-name {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.message-doc-size {
+    color: var(--text-muted);
+    white-space: nowrap;
 }
 /* ===== Image Lightbox ===== */
 .lightbox-overlay {
@@ -3271,4 +3312,274 @@ body::before {
 .input-area {
     position: relative;
 }
+
+/* ===== RAG / Knowledge Base ===== */
+
+/* Attach file button in input area — mirrors .web-search-btn */
+.attach-file-btn {
+    width: 20px;
+    height: 20px;
+    font-size: var(--font-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.attach-file-btn:hover {
+    color: var(--accent-purple, #b18cff);
+    border-color: var(--accent-purple, #b18cff);
+}
+
+.attach-file-btn .icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* File preview strip */
+.file-preview-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+}
+
+.file-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    min-width: 0;
+    flex-shrink: 0;
+    max-width: 240px;
+    transition: border-color var(--transition-fast);
+}
+
+.file-preview-item.file-status-embedding {
+    border-color: var(--accent-purple, #b18cff);
+}
+
+.file-preview-item.file-status-ready {
+    border-color: var(--accent-green);
+}
+
+.file-preview-item.file-status-error {
+    border-color: var(--accent-red, #ff6b6b);
+}
+
+.file-icon-wrap {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.file-icon-wrap .file-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+}
+
+.file-progress-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.file-check, .file-error-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-check {
+    background: var(--accent-green);
+    color: var(--bg-primary);
+}
+
+.file-check .icon {
+    width: 10px;
+    height: 10px;
+}
+
+.file-error-badge {
+    background: var(--accent-red, #ff6b6b);
+    color: var(--bg-primary);
+}
+
+.file-error-badge .icon {
+    width: 10px;
+    height: 10px;
+}
+
+.file-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.file-name {
+    font-size: var(--font-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-meta {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.file-remove-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.file-remove-btn:hover {
+    color: var(--accent-red, #ff6b6b);
+}
+
+.file-remove-btn .icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* Drag-over state for input area */
+.input-area.drag-over {
+    outline: 2px dashed var(--accent-purple, #b18cff);
+    outline-offset: -2px;
+    background: rgba(177, 140, 255, 0.03);
+}
+
+.rag-status {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+
+.rag-status-empty { color: var(--text-secondary); }
+.rag-status-pending { color: var(--accent-yellow, #f0c674); }
+.rag-status-chunking { color: var(--accent-yellow, #f0c674); }
+.rag-status-embedding { color: var(--accent-cyan); }
+.rag-status-processing { color: var(--accent-cyan); }
+.rag-status-ready { color: var(--accent-green); }
+.rag-status-error { color: var(--accent-red, #ff6b6b); }
+
+/* (Upload zone removed — files now uploaded via input area) */
+
+/* Progress bar (settings) */
+.rag-progress-bar {
+    position: relative;
+    height: 20px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.rag-progress-fill {
+    height: 100%;
+    background: var(--accent-purple, #b18cff);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.rag-progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Document list */
+.rag-doc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rag-doc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: var(--font-sm);
+    background: var(--bg-tertiary);
+}
+
+.rag-doc-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.rag-doc-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rag-doc-meta {
+    color: var(--text-secondary);
+    font-size: var(--font-xs);
+    flex-shrink: 0;
+}
+
+.rag-doc-delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    border-radius: 2px;
+    transition: color var(--transition-fast);
+}
+
+.rag-doc-delete-btn:hover {
+    color: var(--accent-red, #ff6b6b);
+}
+
+.rag-doc-delete-btn .icon {
+    width: 12px;
+    height: 12px;
+}
+
+
 

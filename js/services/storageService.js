@@ -17,7 +17,7 @@ import {
     putRecord, putRecords, getRecord, getAllRecords,
     getRecordsByIndex, deleteRecord, deleteByIndex,
     clearStore, countRecords
-} from './idbStore.js?v=35';
+} from './idbStore.js?v=36';
 
 // localStorage keys (used only for migration detection + fallback)
 const LS_PREFIX = 'synapse_';
@@ -91,7 +91,13 @@ class StorageService {
             titleEnabled: true,
             summarizationEnabled: true,
             toolsEnabled: true,
-            systemPrompt: ''
+            systemPrompt: '',
+            ragEmbeddingsModelOllama: '',
+            ragEmbeddingsModelLmstudio: '',
+            ragChunkSize: 512,
+            ragChunkOverlap: 64,
+            ragTopK: 5,
+            ragSimilarityThreshold: 0.3
         };
     }
 

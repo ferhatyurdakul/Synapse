@@ -3,10 +3,10 @@
  * Coordinates between UI, storage (IndexedDB), and providers
  */
 
-import { storageService } from './storageService.js?v=35';
-import { contextService } from './contextService.js?v=35';
-import { providerManager } from './providerManager.js?v=35';
-import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { storageService } from './storageService.js?v=36';
+import { contextService } from './contextService.js?v=36';
+import { providerManager } from './providerManager.js?v=36';
+import { eventBus, Events } from '../utils/eventBus.js?v=36';
 
 /**
  * Generate unique ID for chats
@@ -166,7 +166,7 @@ class ChatService {
      * @param {Array<string>} images - Optional array of base64 data URL images
      * @returns {Object} The added message
      */
-    addMessage(role, content, thinking = '', stats = null, images = null) {
+    addMessage(role, content, thinking = '', stats = null, images = null, documents = null) {
         if (!this.currentChatId) {
             throw new Error('No active chat');
         }
@@ -186,6 +186,10 @@ class ChatService {
 
         if (images && images.length > 0) {
             message.images = images;
+        }
+
+        if (documents && documents.length > 0) {
+            message.documents = documents;
         }
 
         chat.messages.push(message);

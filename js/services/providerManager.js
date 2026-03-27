@@ -3,10 +3,10 @@
  * Acts as a single entry point for provider-related operations
  */
 
-import { ollamaService } from './ollamaService.js?v=35';
-import { lmStudioService } from './lmStudioService.js?v=35';
-import { storageService } from './storageService.js?v=35';
-import { eventBus, Events } from '../utils/eventBus.js?v=35';
+import { ollamaService } from './ollamaService.js?v=36';
+import { lmStudioService } from './lmStudioService.js?v=36';
+import { storageService } from './storageService.js?v=36';
+import { eventBus, Events } from '../utils/eventBus.js?v=36';
 
 const PROVIDERS = {
     ollama: {

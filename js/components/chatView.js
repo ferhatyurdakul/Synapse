@@ -2,17 +2,18 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=35';
-import { contextService } from '../services/contextService.js?v=35';
-import { storageService } from '../services/storageService.js?v=35';
-import { providerManager } from '../services/providerManager.js?v=35';
-import { titleService } from '../services/titleService.js?v=35';
-import { toolRegistry } from '../services/toolRegistry.js?v=35';
-import { eventBus, Events } from '../utils/eventBus.js?v=35';
-import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js?v=35';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=35';
-import { getModelParams } from './settingsPanel.js?v=35';
-import { toast } from './toast.js?v=35';
+import { chatService } from '../services/chatService.js?v=36';
+import { contextService } from '../services/contextService.js?v=36';
+import { storageService } from '../services/storageService.js?v=36';
+import { providerManager } from '../services/providerManager.js?v=36';
+import { titleService } from '../services/titleService.js?v=36';
+import { toolRegistry } from '../services/toolRegistry.js?v=36';
+import { ragService } from '../services/ragService.js?v=36';
+import { eventBus, Events } from '../utils/eventBus.js?v=36';
+import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js?v=36';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=36';
+import { getModelParams } from './settingsPanel.js?v=36';
+import { toast } from './toast.js?v=36';
 
 const PROMPT_EXAMPLES = [
     { icon: '💡', text: 'Explain quantum computing in simple terms' },
@@ -130,13 +131,14 @@ class ChatView {
             this.displayChat(chat);
         });
 
-        eventBus.on(Events.MESSAGE_SENT, async ({ content, images }) => {
-            await this.handleUserMessage(content, images);
+        eventBus.on(Events.MESSAGE_SENT, async ({ content, images, documents }) => {
+            await this.handleUserMessage(content, images, documents);
         });
 
         eventBus.on(Events.WEB_SEARCH_TOGGLED, ({ enabled }) => {
             this.webSearchEnabled = enabled;
         });
+
 
         eventBus.on(Events.STREAM_END, ({ aborted }) => {
             if (aborted) {
@@ -260,7 +262,7 @@ class ChatView {
             if (msg.role === 'tool') {
                 this.appendToolMessage(msg, index);
             } else {
-                this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, index, msg.stats, msg.images);
+                this.appendMessage(msg.role, msg.content, msg.thinking, false, msg.model || chat.model, index, msg.stats, msg.images, msg.documents);
             }
         });
 
@@ -321,7 +323,7 @@ class ChatView {
         this.scrollToBottom(true);
     }
 
-    async handleUserMessage(content, images = null) {
+    async handleUserMessage(content, images = null, documents = null) {
         // Ensure we have a chat
         if (!chatService.getCurrentChat()) {
             if (!this.selectedModel) {
@@ -331,9 +333,9 @@ class ChatView {
             chatService.createChat(this.selectedModel);
         }
 
-        // Add user message with images
-        chatService.addMessage('user', content, '', null, images);
-        this.appendMessage('user', content, '', true, null, -1, null, images);
+        // Add user message with images and documents
+        chatService.addMessage('user', content, '', null, images, documents);
+        this.appendMessage('user', content, '', true, null, -1, null, images, documents);
         this.scrollToBottom(true);
 
         // Start streaming response
@@ -384,7 +386,26 @@ class ChatView {
             if (isViewing()) {
                 streamState.contentEl.innerHTML = '<span class="summarizing-hint"><span class="blink-dot">●</span> Preparing context...</span>';
             }
-            const systemPrompt = chatService.getSystemPrompt();
+            let systemPrompt = chatService.getSystemPrompt();
+
+            // ── RAG: auto-inject relevant document context ───────────────
+            if (await ragService.hasReadyDocuments(streamChatId)) {
+                // Find the last user message as the query
+                const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user');
+                if (lastUserMsg) {
+                    try {
+                        const ragResults = await ragService.search(lastUserMsg.content, streamChatId);
+                        if (ragResults.length > 0) {
+                            const ragContext = ragService.formatContext(ragResults);
+                            const ragPrefix = `The user has uploaded documents. Here is relevant context from those documents — use it to answer the user's question. Cite the source when using this information:\n\n${ragContext}\n\n`;
+                            systemPrompt = ragPrefix + (systemPrompt || '');
+                        }
+                    } catch (err) {
+                        console.warn('[RAG] Search failed, continuing without context:', err);
+                    }
+                }
+            }
+
             const prepared = await chatService.getMessagesForApi(maxCtx, systemPrompt);
             let apiMessages = prepared.messages;
 
@@ -667,7 +688,7 @@ class ChatView {
         return statsEl;
     }
 
-    appendMessage(role, content, thinking = '', animate = true, model = null, msgIndex = -1, stats = null, images = null) {
+    appendMessage(role, content, thinking = '', animate = true, model = null, msgIndex = -1, stats = null, images = null, documents = null) {
         const container = document.getElementById('messages-container');
 
         // Remove welcome message if present
@@ -699,9 +720,24 @@ class ChatView {
         }
 
         const imageHtml = images && images.length > 0
-            ? `<div class="message-images">${images.map(img =>
+            ? images.map(img =>
                 `<img src="${img}" alt="Attached image" class="message-image-thumb">`
-            ).join('')}</div>`
+            ).join('')
+            : '';
+
+        const docHtml = documents && documents.length > 0
+            ? documents.map(doc => {
+                const sizeKB = (doc.size / 1024).toFixed(0);
+                return `<div class="message-doc-badge">
+                    <i data-lucide="file-text" class="icon"></i>
+                    <span class="message-doc-name">${escapeHtml(doc.name)}</span>
+                    <span class="message-doc-size">${sizeKB} KB</span>
+                </div>`;
+            }).join('')
+            : '';
+
+        const attachmentsHtml = (imageHtml || docHtml)
+            ? `<div class="message-attachments">${imageHtml}${docHtml}</div>`
             : '';
 
         messageEl.innerHTML = `
@@ -711,7 +747,7 @@ class ChatView {
                     ${actionButtons}
                 </div>
             </div>
-            ${imageHtml}
+            ${attachmentsHtml}
             <div class="message-content">${renderMarkdown(content)}</div>
         `;
 

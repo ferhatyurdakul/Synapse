@@ -130,5 +130,15 @@ export const Events = {
     // Tool events
     TOOL_RESULT: 'tool:result',
     WEB_SEARCH_TOGGLED: 'tool:webSearchToggled',
-    TOOLS_CAPABILITY_CHANGED: 'tool:capabilityChanged'
+    TOOLS_CAPABILITY_CHANGED: 'tool:capabilityChanged',
+
+    // RAG events
+    RAG_COLLECTION_CREATED: 'rag:collectionCreated',
+    RAG_COLLECTION_DELETED: 'rag:collectionDeleted',
+    RAG_DOCUMENTS_ADDED: 'rag:documentsAdded',
+    RAG_DOCUMENT_DELETED: 'rag:documentDeleted',
+    RAG_EMBEDDING_PROGRESS: 'rag:embeddingProgress',
+    RAG_EMBEDDING_COMPLETE: 'rag:embeddingComplete',
+    RAG_EMBEDDING_ERROR: 'rag:embeddingError',
+    RAG_SEARCH_EXECUTED: 'rag:searchExecuted'
 };

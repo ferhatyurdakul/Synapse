@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -15,6 +15,7 @@ let _db = null;
 /**
  * Store definitions for the onupgradeneeded handler.
  * Each entry: { keyPath, indexes: [{ name, keyPath, options }] }
+ * version: minimum DB version that introduced this store (default 1)
  */
 const STORES = {
     chats: {
@@ -41,7 +42,40 @@ const STORES = {
     settings: { keyPath: 'key' },
     folders: { keyPath: 'id' },
     modelSettings: { keyPath: 'key' },
-    uiState: { keyPath: 'key' }
+    uiState: { keyPath: 'key' },
+
+    // ── RAG stores (v2) ─────────────────────────────────────────────────
+    ragCollections: {
+        version: 2,
+        keyPath: 'id',
+        indexes: [
+            { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+    ragDocuments: {
+        version: 2,
+        keyPath: 'id',
+        indexes: [
+            { name: 'collectionId', keyPath: 'collectionId' },
+            { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+    ragChunks: {
+        version: 2,
+        keyPath: 'id',
+        indexes: [
+            { name: 'documentId', keyPath: 'documentId' },
+            { name: 'collectionId', keyPath: 'collectionId' }
+        ]
+    },
+    ragEmbeddings: {
+        version: 2,
+        keyPath: 'chunkId',
+        indexes: [
+            { name: 'collectionId', keyPath: 'collectionId' },
+            { name: 'documentId', keyPath: 'documentId' }
+        ]
+    }
 };
 
 /**
@@ -56,9 +90,12 @@ export function openDatabase() {
 
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
+            const oldVersion = event.oldVersion;
 
             for (const [storeName, config] of Object.entries(STORES)) {
-                if (!db.objectStoreNames.contains(storeName)) {
+                const storeVersion = config.version || 1;
+                // Only create stores that are new relative to the old version
+                if (storeVersion > oldVersion && !db.objectStoreNames.contains(storeName)) {
                     const store = db.createObjectStore(storeName, { keyPath: config.keyPath });
                     if (config.indexes) {
                         for (const idx of config.indexes) {

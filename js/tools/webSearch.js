@@ -9,8 +9,8 @@
  *    Start with: python3 server.py [port]
  */
 
-import { toolRegistry } from '../services/toolRegistry.js?v=35';
-import { storageService } from '../services/storageService.js?v=35';
+import { toolRegistry } from '../services/toolRegistry.js?v=36';
+import { storageService } from '../services/storageService.js?v=36';
 
 const MAX_RESULTS = 5;
 const DEFAULT_SEARXNG_URL = 'http://localhost:8888';

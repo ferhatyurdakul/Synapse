@@ -3,12 +3,12 @@
  * Supports per-model parameter configuration with multi-provider support
  */
 
-import { titleService } from '../services/titleService.js?v=35';
-import { contextService } from '../services/contextService.js?v=35';
-import { providerManager } from '../services/providerManager.js?v=35';
-import { storageService } from '../services/storageService.js?v=35';
-import { eventBus, Events } from '../utils/eventBus.js?v=35';
-import { toast } from './toast.js?v=35';
+import { titleService } from '../services/titleService.js?v=36';
+import { contextService } from '../services/contextService.js?v=36';
+import { providerManager } from '../services/providerManager.js?v=36';
+import { storageService } from '../services/storageService.js?v=36';
+import { eventBus, Events } from '../utils/eventBus.js?v=36';
+import { toast } from './toast.js?v=36';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -32,6 +32,7 @@ const TABS = [
     { id: 'general', label: 'General', icon: 'sliders-horizontal' },
     { id: 'models', label: 'Models', icon: 'brain' },
     { id: 'tools', label: 'Tools', icon: 'wrench' },
+    { id: 'knowledge', label: 'Knowledge Base', icon: 'library' },
     { id: 'storage', label: 'Storage', icon: 'database' }
 ];
 
@@ -243,6 +244,56 @@ class SettingsPanel {
                         </div>
                     </div>
 
+                    <!-- Knowledge Base Tab -->
+                    <div class="settings-page" data-page="knowledge">
+                        <div class="settings-section">
+                            <h3>Knowledge Base (RAG)</h3>
+                            <p class="settings-description">Drop files into the chat input to add them to your knowledge base. The model can search your documents when answering questions.</p>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>Embeddings</h3>
+                            <p class="settings-description">Choose an embedding model for each provider. The active chat provider's model is used automatically.</p>
+                            <div class="settings-field">
+                                <label for="rag-model-ollama">Ollama</label>
+                                <select id="rag-model-ollama" class="settings-select">
+                                    <option value="">Loading models…</option>
+                                </select>
+                            </div>
+                            <div class="settings-field">
+                                <label for="rag-model-lmstudio">LM Studio</label>
+                                <select id="rag-model-lmstudio" class="settings-select">
+                                    <option value="">Loading models…</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>Chunking</h3>
+                            <div class="settings-field">
+                                <label for="rag-chunk-size">Chunk size (characters)</label>
+                                <input type="number" id="rag-chunk-size" class="settings-input" value="512" min="128" max="4096" step="64">
+                            </div>
+                            <div class="settings-field">
+                                <label for="rag-chunk-overlap">Chunk overlap (characters)</label>
+                                <input type="number" id="rag-chunk-overlap" class="settings-input" value="64" min="0" max="512" step="16">
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>Retrieval</h3>
+                            <div class="settings-field">
+                                <label for="rag-top-k">Results per search (Top K)</label>
+                                <input type="number" id="rag-top-k" class="settings-input" value="5" min="1" max="20">
+                            </div>
+                            <div class="settings-field">
+                                <label for="rag-threshold">Similarity threshold (0–1)</label>
+                                <input type="number" id="rag-threshold" class="settings-input" value="0.3" min="0" max="1" step="0.05">
+                            </div>
+                        </div>
+
+                    </div>
+
                     <!-- Storage Tab -->
                     <div class="settings-page" data-page="storage">
                         <div class="settings-section">
@@ -314,7 +365,6 @@ class SettingsPanel {
             page.classList.toggle('active', page.dataset.page === tabId);
         });
 
-        // Refresh storage stats when switching to storage tab
         if (tabId === 'storage') {
             this.refreshStorageStats();
         }
@@ -346,6 +396,12 @@ class SettingsPanel {
                 <span>${info.attachmentCount} image${info.attachmentCount !== 1 ? 's' : ''}</span>
             `;
         }
+    }
+
+    _escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     attachEventListeners() {
@@ -511,13 +567,14 @@ class SettingsPanel {
             });
         });
 
+
         // Storage tab — cleanup old chats
         document.getElementById('cleanup-old-chats-btn').addEventListener('click', async () => {
             const days = parseInt(document.getElementById('cleanup-days-input').value) || 90;
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - days);
 
-            const { chatService } = await import('../services/chatService.js?v=35');
+            const { chatService } = await import('../services/chatService.js?v=36');
             const allChats = chatService.getAllChats();
             const oldChats = allChats.filter(c => new Date(c.updatedAt) < cutoff);
 
@@ -545,6 +602,13 @@ class SettingsPanel {
 
         // Load tools toggle
         document.getElementById('tools-enabled-toggle').checked = settings.toolsEnabled !== false;
+
+        // Load RAG settings — load both providers in parallel
+        await this.loadAllEmbeddingModels();
+        document.getElementById('rag-chunk-size').value = settings.ragChunkSize || 512;
+        document.getElementById('rag-chunk-overlap').value = settings.ragChunkOverlap || 64;
+        document.getElementById('rag-top-k').value = settings.ragTopK || 5;
+        document.getElementById('rag-threshold').value = settings.ragSimilarityThreshold ?? 0.3;
 
         // Load web search settings
         const searchProvider = settings.searchProvider || 'searxng';
@@ -586,6 +650,84 @@ class SettingsPanel {
     close() {
         this.isOpen = false;
         document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    /**
+     * Load embedding model selects for all providers in parallel.
+     */
+    async loadAllEmbeddingModels() {
+        const settings = storageService.loadSettings();
+        await Promise.all([
+            this._loadEmbeddingSelect('ollama', 'rag-model-ollama', settings.ragEmbeddingsModelOllama),
+            this._loadEmbeddingSelect('lmstudio', 'rag-model-lmstudio', settings.ragEmbeddingsModelLmstudio)
+        ]);
+    }
+
+    /**
+     * Populate a single embedding model select for a given provider.
+     * @private
+     */
+    async _loadEmbeddingSelect(providerName, selectId, savedModel) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        select.innerHTML = '<option value="">Loading models…</option>';
+        const baseUrl = providerManager.getProviderUrl(providerName);
+
+        try {
+            let models = [];
+
+            if (providerName === 'ollama') {
+                const res = await fetch(`${baseUrl}/api/tags`);
+                if (!res.ok) throw new Error('Failed to fetch');
+                const data = await res.json();
+                const allModels = data.models || [];
+                const embeddingKeywords = ['embed', 'bge', 'e5-', 'gte-', 'minilm', 'all-minilm'];
+                models = allModels.map(m => ({
+                    name: m.name,
+                    isEmbedding: embeddingKeywords.some(kw => m.name.toLowerCase().includes(kw))
+                }));
+                models.sort((a, b) => (b.isEmbedding ? 1 : 0) - (a.isEmbedding ? 1 : 0));
+            } else {
+                // LM Studio: try v0 API for type-aware list
+                let fetched = false;
+                try {
+                    const res = await fetch(`${baseUrl}/api/v0/models`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const allModels = data.data || data || [];
+                        models = allModels
+                            .filter(m => m.type === 'embeddings')
+                            .map(m => ({ name: m.id, isEmbedding: true }));
+                        fetched = true;
+                    }
+                } catch { /* fall through */ }
+
+                if (!fetched) {
+                    const res = await fetch(`${baseUrl}/v1/models`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        models = (data.data || []).map(m => ({ name: m.id, isEmbedding: false }));
+                    }
+                }
+            }
+
+            if (models.length === 0) {
+                select.innerHTML = '<option value="">No models found</option>';
+                return;
+            }
+
+            select.innerHTML = models.map(m => {
+                const prefix = m.isEmbedding ? '● ' : '';
+                const sel = m.name === savedModel ? ' selected' : '';
+                return `<option value="${m.name}"${sel}>${prefix}${m.name}</option>`;
+            }).join('');
+
+            // If saved model not in list, keep first option selected
+        } catch (err) {
+            console.error(`Failed to load embedding models for ${providerName}:`, err);
+            select.innerHTML = '<option value="">Not connected</option>';
+        }
     }
 
     toggleSearchProviderUI(provider) {
@@ -790,6 +932,15 @@ class SettingsPanel {
             settings.searchProvider = document.getElementById('search-provider-select').value;
             settings.searxngUrl = document.getElementById('searxng-url-input').value.trim();
             settings.braveApiKey = document.getElementById('brave-api-key-input').value.trim();
+
+            // RAG settings — per-provider embedding models
+            settings.ragEmbeddingsModelOllama = document.getElementById('rag-model-ollama').value || '';
+            settings.ragEmbeddingsModelLmstudio = document.getElementById('rag-model-lmstudio').value || '';
+            settings.ragChunkSize = parseInt(document.getElementById('rag-chunk-size').value) || 512;
+            settings.ragChunkOverlap = parseInt(document.getElementById('rag-chunk-overlap').value) || 64;
+            settings.ragTopK = parseInt(document.getElementById('rag-top-k').value) || 5;
+            settings.ragSimilarityThreshold = parseFloat(document.getElementById('rag-threshold').value) || 0.3;
+
             storageService.saveSettings(settings);
         }
 
