@@ -25,6 +25,8 @@ class InputArea {
         this.webSearchEnabled = false;
         this.webSearchConfigured = false;
         this.modelSupportsTools = true;
+        /** @type {Map<string, string>} chatId → draft text */
+        this.drafts = this._loadDrafts();
 
         this.init();
     }
@@ -34,6 +36,10 @@ class InputArea {
         this.attachEvents();
         this.listenToEvents();
         this.updateWebSearchAvailability();
+
+        // Restore draft for current chat on load
+        const chatId = chatService.getCurrentChatId();
+        if (chatId) this.restoreDraft(chatId);
     }
 
     isWebSearchConfigured() {
@@ -81,16 +87,12 @@ class InputArea {
             <div class="input-area">
                 <div id="attachments-strip" class="attachments-strip hidden"></div>
                 <div class="input-wrapper">
-                    <input type="file" id="image-file-input" accept="image/*" multiple class="hidden">
-                    <input type="file" id="doc-file-input" accept=".pdf,.txt,.md,.markdown,.text" multiple class="hidden">
+                    <input type="file" id="attach-file-input" accept="image/*,.pdf,.txt,.md,.markdown,.text" multiple class="hidden">
                     <button id="web-search-btn" class="web-search-btn" title="Toggle web search" aria-label="Toggle web search">
                         <i data-lucide="globe" class="icon"></i>
                     </button>
-                    <button id="attach-file-btn" class="attach-file-btn" title="Attach files for knowledge base (PDF, TXT, MD)" aria-label="Attach files">
-                        <i data-lucide="file-plus" class="icon"></i>
-                    </button>
-                    <button id="attach-image-btn" class="attach-image-btn hidden" title="Attach image" aria-label="Attach image">
-                        <i data-lucide="image-plus" class="icon"></i>
+                    <button id="attach-btn" class="attach-btn" title="Attach files or images" aria-label="Attach files or images">
+                        <i data-lucide="paperclip" class="icon"></i>
                     </button>
                     <textarea
                         id="message-input"
@@ -120,15 +122,14 @@ class InputArea {
         const input = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
         const stopBtn = document.getElementById('stop-btn');
-        const attachBtn = document.getElementById('attach-image-btn');
-        const fileInput = document.getElementById('image-file-input');
-        const attachFileBtn = document.getElementById('attach-file-btn');
-        const docFileInput = document.getElementById('doc-file-input');
+        const attachBtn = document.getElementById('attach-btn');
+        const attachInput = document.getElementById('attach-file-input');
 
-        // Auto-resize textarea
+        // Auto-resize textarea and save draft
         input.addEventListener('input', () => {
             input.style.height = 'auto';
             input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+            this.saveDraft();
         });
 
         // Handle Enter key
@@ -173,36 +174,29 @@ class InputArea {
             eventBus.emit(Events.WEB_SEARCH_TOGGLED, { enabled: this.webSearchEnabled });
         });
 
-        // Attach image button
+        // Unified attach button
         attachBtn.addEventListener('click', () => {
-            fileInput.click();
+            // Update accepted types based on vision support
+            if (this.supportsVision) {
+                attachInput.accept = 'image/*,.pdf,.txt,.md,.markdown,.text';
+            } else {
+                attachInput.accept = '.pdf,.txt,.md,.markdown,.text';
+            }
+            attachInput.click();
         });
 
-        // Image file input change
-        fileInput.addEventListener('change', (e) => {
+        // Unified file input change — route by type
+        attachInput.addEventListener('change', (e) => {
             const files = e.target.files;
             if (!files) return;
             for (const file of files) {
-                if (file.type.startsWith('image/')) {
+                if (this._isDocFile(file)) {
+                    this.addDocFile(file);
+                } else if (file.type.startsWith('image/') && this.supportsVision) {
                     this.addImageFile(file);
                 }
             }
-            fileInput.value = '';
-        });
-
-        // Attach document file button
-        attachFileBtn.addEventListener('click', () => {
-            docFileInput.click();
-        });
-
-        // Document file input change
-        docFileInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (!files) return;
-            for (const file of files) {
-                this.addDocFile(file);
-            }
-            docFileInput.value = '';
+            attachInput.value = '';
         });
 
         // Drag and drop on input area
@@ -252,6 +246,17 @@ class InputArea {
             this.setStreaming(streaming);
         });
 
+        // Save draft before switching, restore draft for new chat
+        eventBus.on(Events.CHAT_SELECTED, ({ chat }) => {
+            this.saveDraft();
+            this.restoreDraft(chat.id);
+        });
+
+        eventBus.on(Events.CHAT_CREATED, ({ id }) => {
+            this.saveDraft();
+            this.restoreDraft(id);
+        });
+
         eventBus.on(Events.TOOLS_CAPABILITY_CHANGED, ({ supportsTools }) => {
             this.modelSupportsTools = supportsTools;
             this.updateWebSearchAvailability();
@@ -263,14 +268,8 @@ class InputArea {
 
         eventBus.on(Events.VISION_CAPABILITY_CHANGED, ({ supportsVision }) => {
             this.supportsVision = supportsVision;
-            const attachBtn = document.getElementById('attach-image-btn');
-            if (attachBtn) {
-                if (supportsVision) {
-                    attachBtn.classList.remove('hidden');
-                } else {
-                    attachBtn.classList.add('hidden');
-                    this.clearPendingImages();
-                }
+            if (!supportsVision) {
+                this.clearPendingImages();
             }
         });
 
@@ -332,12 +331,13 @@ class InputArea {
 
         eventBus.emit(Events.MESSAGE_SENT, payload);
 
-        // Clear input and attachments
+        // Clear input, attachments, and draft
         input.value = '';
         input.style.height = 'auto';
         this.clearPendingImages();
         this.pendingFiles = [];
         this.renderAttachments();
+        this.clearDraft(chatService.getCurrentChatId());
         input.focus();
     }
 
@@ -558,6 +558,51 @@ class InputArea {
 
     focus() {
         document.getElementById('message-input')?.focus();
+    }
+
+    // ── Draft persistence ─────────────────────────────────────────────
+
+    saveDraft() {
+        const chatId = chatService.getCurrentChatId();
+        if (!chatId) return;
+        const input = document.getElementById('message-input');
+        const text = input?.value || '';
+        if (text) {
+            this.drafts.set(chatId, text);
+        } else {
+            this.drafts.delete(chatId);
+        }
+        this._persistDrafts();
+    }
+
+    restoreDraft(chatId) {
+        const input = document.getElementById('message-input');
+        if (!input) return;
+        input.value = this.drafts.get(chatId) || '';
+        input.style.height = 'auto';
+        if (input.value) {
+            input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+        }
+    }
+
+    clearDraft(chatId) {
+        this.drafts.delete(chatId);
+        this._persistDrafts();
+    }
+
+    _persistDrafts() {
+        try {
+            const obj = Object.fromEntries(this.drafts);
+            sessionStorage.setItem('synapse_drafts', JSON.stringify(obj));
+        } catch { /* quota exceeded — ignore */ }
+    }
+
+    _loadDrafts() {
+        try {
+            const raw = sessionStorage.getItem('synapse_drafts');
+            if (raw) return new Map(Object.entries(JSON.parse(raw)));
+        } catch { /* ignore */ }
+        return new Map();
     }
 }
 

@@ -9,6 +9,7 @@ import { providerManager } from '../services/providerManager.js?v=36';
 import { storageService } from '../services/storageService.js?v=36';
 import { eventBus, Events } from '../utils/eventBus.js?v=36';
 import { toast } from './toast.js?v=36';
+import { themeService } from '../services/themeService.js?v=36';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -76,6 +77,37 @@ class SettingsPanel {
                 <div class="settings-content">
                     <!-- General Tab -->
                     <div class="settings-page active" data-page="general">
+                        <div class="settings-section">
+                            <h3>Theme</h3>
+                            <p class="settings-description">Choose the visual style for Synapse.</p>
+                            <div class="settings-field">
+                                <div class="theme-picker" id="theme-picker">
+                                    <button class="theme-option" data-theme="retro" type="button">
+                                        <div class="theme-preview retro-preview">
+                                            <div class="theme-preview-sidebar"></div>
+                                            <div class="theme-preview-main">
+                                                <div class="theme-preview-msg"></div>
+                                                <div class="theme-preview-msg"></div>
+                                                <div class="theme-preview-input"></div>
+                                            </div>
+                                        </div>
+                                        <span>Retro</span>
+                                    </button>
+                                    <button class="theme-option" data-theme="modern" type="button">
+                                        <div class="theme-preview modern-preview">
+                                            <div class="theme-preview-sidebar"></div>
+                                            <div class="theme-preview-main">
+                                                <div class="theme-preview-msg"></div>
+                                                <div class="theme-preview-msg"></div>
+                                                <div class="theme-preview-input"></div>
+                                            </div>
+                                        </div>
+                                        <span>Modern</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="settings-section">
                             <h3>System Prompt</h3>
                             <p class="settings-description">Default instructions sent to the model at the start of every chat. Folder prompts override this.</p>
@@ -410,6 +442,15 @@ class SettingsPanel {
         document.getElementById('settings-save-btn').addEventListener('click', () => this.save());
         document.getElementById('reset-params-btn').addEventListener('click', () => this.resetParams());
 
+        // Theme picker — apply immediately on click
+        document.querySelectorAll('.theme-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.theme-option').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                themeService.setTheme(btn.dataset.theme);
+            });
+        });
+
         // Tab switching
         document.querySelectorAll('.settings-tab').forEach(btn => {
             btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
@@ -599,6 +640,12 @@ class SettingsPanel {
         document.getElementById('settings-modal').classList.remove('hidden');
 
         const settings = storageService.loadSettings();
+
+        // Set active theme button
+        const currentTheme = settings.theme || 'retro';
+        document.querySelectorAll('.theme-option').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.theme === currentTheme);
+        });
 
         // Load tools toggle
         document.getElementById('tools-enabled-toggle').checked = settings.toolsEnabled !== false;

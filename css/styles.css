@@ -30,6 +30,8 @@
 
     /* Typography */
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    --font-family: var(--font-mono);
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
     /* Spacing */
     --sidebar-width: 220px;
@@ -40,9 +42,22 @@
     --font-xs: 12px;
     --font-sm: 13px;
     --font-content: 10px;
-    /* Message content - keep small */
     --font-lg: 14px;
     --font-xl: 15px;
+    --font-base: 8px;
+
+    /* Border Radius */
+    --radius-xs: 2px;
+    --radius-sm: 3px;
+    --radius-md: 4px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-pill: 999px;
+
+    /* Shadows */
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
 
     /* Effects */
     --glow-cyan: 0 0 6px rgba(0, 212, 255, 0.5);
@@ -67,8 +82,8 @@ body {
 }
 
 body {
-    font-family: var(--font-mono);
-    font-size: 8px;
+    font-family: var(--font-family);
+    font-size: var(--font-base);
     line-height: 1.3;
     color: var(--text-primary);
     background: var(--bg-primary);
@@ -1610,6 +1625,32 @@ body::before {
     flex-shrink: 0;
 }
 
+.retry-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--accent-cyan);
+    color: var(--accent-cyan);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    transition: all var(--transition-fast);
+}
+
+.retry-btn:hover {
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+}
+
+.retry-btn .icon {
+    width: 12px;
+    height: 12px;
+}
+
 /* ===== Thinking Block ===== */
 .thinking-block {
     margin-bottom: 12px;
@@ -2079,6 +2120,13 @@ body::before {
     background: var(--bg-tertiary);
     padding: 0 8px;
     gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+}
+
+.settings-tabs::-webkit-scrollbar {
+    display: none;
 }
 
 .settings-tab {
@@ -2985,7 +3033,7 @@ body::before {
 }
 
 /* ===== Image Upload & Preview ===== */
-.attach-image-btn {
+.attach-btn {
     width: 20px;
     height: 20px;
     font-size: var(--font-sm);
@@ -3001,12 +3049,12 @@ body::before {
     flex-shrink: 0;
 }
 
-.attach-image-btn:hover {
+.attach-btn:hover {
     color: var(--accent-cyan);
     border-color: var(--accent-cyan);
 }
 
-.attach-image-btn .icon {
+.attach-btn .icon {
     width: 14px;
     height: 14px;
 }
@@ -3316,31 +3364,6 @@ body::before {
 /* ===== RAG / Knowledge Base ===== */
 
 /* Attach file button in input area — mirrors .web-search-btn */
-.attach-file-btn {
-    width: 20px;
-    height: 20px;
-    font-size: var(--font-sm);
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.attach-file-btn:hover {
-    color: var(--accent-purple, #b18cff);
-    border-color: var(--accent-purple, #b18cff);
-}
-
-.attach-file-btn .icon {
-    width: 14px;
-    height: 14px;
-}
 
 /* File preview strip */
 .file-preview-strip {

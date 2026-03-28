@@ -14,6 +14,7 @@ import { chatService } from './services/chatService.js?v=36';
 import { providerManager } from './services/providerManager.js?v=36';
 import { eventBus, Events } from './utils/eventBus.js?v=36';
 import { toast } from './components/toast.js?v=36';
+import { themeService } from './services/themeService.js?v=36';
 import './tools/builtins.js?v=36'; // registers built-in tools into toolRegistry
 import './tools/webSearch.js?v=36'; // registers web search tool
 
@@ -32,6 +33,7 @@ class App {
         // Initialize storage (IndexedDB + migration from localStorage)
         await storageService.init();
         providerManager.reload(); // re-read saved provider settings from IDB cache
+        themeService.applyTheme();
         await chatService.load();
 
         // Check connectivity for active provider

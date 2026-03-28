@@ -21,7 +21,13 @@
         rel="stylesheet">
 
     <!-- Styles -->
-    <link rel="stylesheet" href="css/styles.css?v=4">
+    <link rel="stylesheet" href="css/styles.css?v=5">
+    <link rel="stylesheet" href="css/themes/modern.css?v=2">
+
+    <!-- Apply saved theme before paint to prevent flash -->
+    <script>
+        try { const t = localStorage.getItem('synapse_theme'); if (t && t !== 'retro') document.documentElement.dataset.theme = t; } catch {}
+    </script>
 
     <!-- KaTeX for LaTeX rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
