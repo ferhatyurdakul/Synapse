@@ -73,6 +73,7 @@ class SettingsPanel {
                             <span>${tab.label}</span>
                         </button>
                     `).join('')}
+                    <span class="settings-tabs-scroll-hint">›</span>
                 </nav>
                 <div class="settings-content">
                     <!-- General Tab -->
@@ -455,6 +456,18 @@ class SettingsPanel {
         document.querySelectorAll('.settings-tab').forEach(btn => {
             btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
         });
+
+        // Scroll hint for settings tabs
+        const tabsNav = document.querySelector('.settings-tabs');
+        const scrollHint = tabsNav?.querySelector('.settings-tabs-scroll-hint');
+        if (tabsNav && scrollHint) {
+            const updateHint = () => {
+                const atEnd = tabsNav.scrollLeft + tabsNav.clientWidth >= tabsNav.scrollWidth - 4;
+                scrollHint.classList.toggle('hidden', atEnd);
+            };
+            tabsNav.addEventListener('scroll', updateHint);
+            updateHint();
+        }
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isOpen) {

@@ -394,6 +394,10 @@ html[data-theme="modern"] .settings-header h2 {
     font-family: var(--font-sans);
 }
 
+html[data-theme="modern"] .settings-tabs-scroll-hint {
+    display: none;
+}
+
 html[data-theme="modern"] .settings-tab {
     font-family: var(--font-sans);
     border-radius: var(--radius-sm);
