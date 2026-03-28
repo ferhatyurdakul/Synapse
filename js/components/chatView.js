@@ -631,7 +631,18 @@ class ChatView {
                 console.error('Stream error:', error);
                 // Only show error in DOM if user is viewing this chat
                 if (chatService.getCurrentChatId() === streamChatId) {
-                    streamState.contentEl.innerHTML = `<span class="error-message"><i data-lucide="alert-triangle" class="icon"></i> Error: ${error.message}</span>`;
+                    streamState.contentEl.innerHTML = `
+                        <span class="error-message">
+                            <i data-lucide="alert-triangle" class="icon"></i> Error: ${error.message}
+                        </span>
+                        <button class="retry-btn" title="Retry">
+                            <i data-lucide="refresh-cw" class="icon"></i> Retry
+                        </button>`;
+                    const retryBtn = streamState.contentEl.querySelector('.retry-btn');
+                    retryBtn.addEventListener('click', () => {
+                        streamState.messageEl.remove();
+                        this.streamResponse();
+                    });
                     refreshIcons();
                 }
                 eventBus.emit(Events.STREAM_ERROR, { error, chatId: streamChatId });

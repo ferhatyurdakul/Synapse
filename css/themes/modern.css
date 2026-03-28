@@ -1,0 +1,694 @@
+/*
+ * Synapse - Modern Theme
+ * Clean, spacious design with soft shadows and rounded elements.
+ * Applied via html[data-theme="modern"]
+ */
+
+html[data-theme="modern"] {
+    /* Color Palette — neutral dark with soft blue accent */
+    --bg-primary: #18181b;
+    --bg-secondary: #1f1f23;
+    --bg-tertiary: #27272a;
+    --bg-hover: #2e2e33;
+
+    --text-primary: #f0f0f3;
+    --text-secondary: #a1a1aa;
+    --text-muted: #6b6b76;
+
+    --accent-cyan: #6d9fff;
+    --accent-blue: #5b8def;
+    --accent-purple: #a78bfa;
+    --accent-teal: #5eadb0;
+    --accent-green: #34d399;
+    --accent-yellow: #fbbf24;
+
+    --border-color: #333338;
+    --border-glow: transparent;
+
+    --error-color: #f87171;
+    --success-color: #34d399;
+
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-base: 14px;
+    --font-xs: 12px;
+    --font-sm: 13px;
+    --font-content: 14px;
+    --font-lg: 15px;
+    --font-xl: 16px;
+
+    /* Border Radius — rounded */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 16px;
+    --radius-pill: 999px;
+
+    /* Shadows — soft elevation */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+
+    /* Disable neon glows */
+    --glow-cyan: none;
+    --glow-blue: none;
+
+    /* Layout */
+    --sidebar-width: 260px;
+    --header-height: 52px;
+}
+
+/* ── Kill scanlines ────────────────────────────────────────────────── */
+html[data-theme="modern"] body::before {
+    display: none;
+}
+
+/* ── Body ──────────────────────────────────────────────────────────── */
+html[data-theme="modern"] body {
+    line-height: 1.5;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────── */
+html[data-theme="modern"] .sidebar {
+    border-right: none;
+    box-shadow: var(--shadow-md);
+}
+
+html[data-theme="modern"] .sidebar-header {
+    padding: 12px 14px;
+}
+
+html[data-theme="modern"] .app-title {
+    font-family: var(--font-sans);
+    text-shadow: none;
+    letter-spacing: 0.5px;
+}
+
+html[data-theme="modern"] .app-title::after {
+    display: none; /* remove blinking cursor */
+}
+
+html[data-theme="modern"] .action-btn {
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .action-btn.primary {
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    color: #fff;
+}
+
+html[data-theme="modern"] .action-btn.primary:hover {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    box-shadow: none;
+}
+
+html[data-theme="modern"] .chat-item {
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    margin-bottom: 2px;
+}
+
+html[data-theme="modern"] .chat-item.active {
+    box-shadow: none;
+    border-color: var(--accent-cyan);
+    background: rgba(109, 159, 255, 0.1);
+}
+
+html[data-theme="modern"] .chat-title {
+    font-family: var(--font-sans);
+    font-size: var(--font-sm);
+}
+
+html[data-theme="modern"] .folder-name {
+    font-family: var(--font-sans);
+    font-size: var(--font-sm);
+}
+
+html[data-theme="modern"] .search-input {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .search-wrapper {
+    border-radius: var(--radius-md);
+}
+
+html[data-theme="modern"] .search-wrapper:focus-within {
+    box-shadow: 0 0 0 2px rgba(109, 159, 255, 0.3);
+}
+
+html[data-theme="modern"] .section-header {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+html[data-theme="modern"] .footer-btn {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+html[data-theme="modern"] .chat-header {
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 16px;
+}
+
+html[data-theme="modern"] .model-selector label {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .terminal-select {
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    padding: 5px 8px;
+}
+
+html[data-theme="modern"] .terminal-select:hover,
+html[data-theme="modern"] .terminal-select:focus {
+    box-shadow: 0 0 0 2px rgba(109, 159, 255, 0.3);
+}
+
+html[data-theme="modern"] .icon-btn {
+    border-radius: var(--radius-sm);
+}
+
+/* ── Messages ──────────────────────────────────────────────────────── */
+html[data-theme="modern"] .messages-container {
+    padding: 20px;
+}
+
+html[data-theme="modern"] .message {
+    border-radius: var(--radius-lg);
+    border: none;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+html[data-theme="modern"] .message.user-message {
+    border-left: none;
+    background: var(--bg-tertiary);
+}
+
+html[data-theme="modern"] .message.assistant-message {
+    border-left: none;
+    background: var(--bg-secondary);
+}
+
+html[data-theme="modern"] .message-role {
+    font-family: var(--font-sans);
+    font-weight: 600;
+}
+
+html[data-theme="modern"] .message-content {
+    font-family: var(--font-sans);
+    line-height: 1.6;
+}
+
+html[data-theme="modern"] .message-content code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    border-radius: var(--radius-xs);
+}
+
+html[data-theme="modern"] .message-content pre {
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+html[data-theme="modern"] .message-content blockquote {
+    border-radius: var(--radius-sm);
+}
+
+html[data-theme="modern"] .message-action-btn {
+    border-radius: var(--radius-sm);
+}
+
+html[data-theme="modern"] .message-edit-area {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .edit-save-btn,
+html[data-theme="modern"] .edit-cancel-btn {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+}
+
+html[data-theme="modern"] .message-doc-badge {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+/* ── Thinking Block ────────────────────────────────────────────────── */
+html[data-theme="modern"] .thinking-block {
+    border-radius: var(--radius-md);
+    border-width: 1px;
+}
+
+html[data-theme="modern"] .thinking-header {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .thinking-block.collapsed .thinking-header {
+    border-radius: var(--radius-md);
+}
+
+/* ── Code Blocks ───────────────────────────────────────────────────── */
+html[data-theme="modern"] .code-block-header {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .code-block-container pre {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+html[data-theme="modern"] .code-copy-btn {
+    border-radius: var(--radius-sm);
+}
+
+/* ── Welcome Screen ────────────────────────────────────────────────── */
+html[data-theme="modern"] .welcome-message h2 {
+    font-family: var(--font-sans);
+    text-shadow: none;
+}
+
+html[data-theme="modern"] .welcome-message p {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .prompt-card {
+    border-radius: var(--radius-lg);
+    font-family: var(--font-sans);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+}
+
+html[data-theme="modern"] .prompt-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+/* ── Input Area ────────────────────────────────────────────────────── */
+html[data-theme="modern"] .input-area {
+    border-top: 1px solid var(--border-color);
+    padding: 12px 16px;
+}
+
+html[data-theme="modern"] .terminal-input {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: var(--font-sm);
+    padding: 8px 12px;
+}
+
+html[data-theme="modern"] .terminal-input:focus {
+    box-shadow: 0 0 0 2px rgba(109, 159, 255, 0.3);
+}
+
+html[data-theme="modern"] .send-btn,
+html[data-theme="modern"] .stop-btn {
+    border-radius: var(--radius-md);
+    width: 34px;
+    height: 34px;
+}
+
+html[data-theme="modern"] .send-btn:hover:not(:disabled) {
+    box-shadow: var(--shadow-sm);
+}
+
+html[data-theme="modern"] .attach-btn {
+    border-radius: var(--radius-sm);
+    width: 28px;
+    height: 28px;
+}
+
+html[data-theme="modern"] .web-search-btn {
+    border-radius: var(--radius-sm);
+    width: 28px;
+    height: 28px;
+}
+
+html[data-theme="modern"] .input-hint {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .input-hint kbd {
+    border-radius: var(--radius-xs);
+    font-family: var(--font-sans);
+}
+
+/* ── Attachments Strip ─────────────────────────────────────────────── */
+html[data-theme="modern"] .attachments-strip {
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 16px;
+}
+
+html[data-theme="modern"] .image-preview-item {
+    border-radius: var(--radius-md);
+}
+
+html[data-theme="modern"] .file-preview-item {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+/* ── Scroll to Bottom ──────────────────────────────────────────────── */
+html[data-theme="modern"] .scroll-to-bottom-btn {
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+}
+
+/* ── Status Bar ────────────────────────────────────────────────────── */
+html[data-theme="modern"] .status-bar {
+    font-family: var(--font-sans);
+    border-top: 1px solid var(--border-color);
+}
+
+html[data-theme="modern"] .status-dot.online {
+    box-shadow: 0 0 4px rgba(52, 211, 153, 0.5);
+}
+
+/* ── Settings Modal ────────────────────────────────────────────────── */
+html[data-theme="modern"] .settings-panel {
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+}
+
+html[data-theme="modern"] .settings-header {
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-header h2 {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-tabs {
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted) transparent;
+}
+
+html[data-theme="modern"] .settings-tabs::-webkit-scrollbar {
+    display: block;
+    height: 3px;
+}
+
+html[data-theme="modern"] .settings-tabs::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: var(--radius-pill);
+}
+
+html[data-theme="modern"] .settings-tabs::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+html[data-theme="modern"] .settings-tab {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+}
+
+html[data-theme="modern"] .settings-tab.active {
+    background: var(--bg-hover);
+}
+
+html[data-theme="modern"] .settings-section h3 {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-description {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-select {
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-input {
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-textarea {
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-footer {
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+html[data-theme="modern"] .settings-btn {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .settings-save-btn {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .toggle-slider {
+    border-radius: 22px;
+}
+
+/* ── Confirm Dialog ────────────────────────────────────────────────── */
+html[data-theme="modern"] .confirm-panel {
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .confirm-btn {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+/* ── Toast Notifications ───────────────────────────────────────────── */
+html[data-theme="modern"] .toast {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    font-family: var(--font-sans);
+    border-left-width: 3px;
+}
+
+html[data-theme="modern"] .context-meter-text {
+    font-family: var(--font-sans);
+}
+
+/* ── Context Meter ─────────────────────────────────────────────────── */
+html[data-theme="modern"] .context-meter-bar {
+    border-radius: var(--radius-pill);
+}
+
+html[data-theme="modern"] .context-meter-fill {
+    border-radius: var(--radius-pill);
+}
+
+/* ── Message Stats ─────────────────────────────────────────────────── */
+html[data-theme="modern"] .message-stats {
+    font-family: var(--font-sans);
+    font-size: var(--font-xs);
+}
+
+/* ── Cleanup / Storage Buttons ────────────────────────────────────── */
+html[data-theme="modern"] .cleanup-row span,
+html[data-theme="modern"] .cleanup-btn,
+html[data-theme="modern"] .cleanup-input {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .storage-info,
+html[data-theme="modern"] .storage-counts {
+    font-family: var(--font-sans);
+}
+
+/* ── Retry Button ──────────────────────────────────────────────────── */
+html[data-theme="modern"] .retry-btn {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+/* ── Error Message ─────────────────────────────────────────────────── */
+html[data-theme="modern"] .error-message {
+    font-family: var(--font-sans);
+}
+
+/* ── Export Modal ──────────────────────────────────────────────────── */
+html[data-theme="modern"] .export-panel {
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .export-btn {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-md);
+}
+
+html[data-theme="modern"] .export-select {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+}
+
+/* ── Lightbox ──────────────────────────────────────────────────────── */
+html[data-theme="modern"] .lightbox-image {
+    border-radius: var(--radius-md);
+}
+
+/* ── Filter Panel ──────────────────────────────────────────────────── */
+html[data-theme="modern"] .filter-panel {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .filter-select {
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .filter-flag-btn {
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+}
+
+/* ── Folders ───────────────────────────────────────────────────────── */
+html[data-theme="modern"] .folder-header {
+    border-radius: var(--radius-md);
+}
+
+html[data-theme="modern"] .folder-menu {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+}
+
+html[data-theme="modern"] .folder-menu-item {
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .folder-sysprompt-textarea {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+}
+
+html[data-theme="modern"] .folder-sysprompt-save,
+html[data-theme="modern"] .folder-sysprompt-cancel {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+}
+
+html[data-theme="modern"] .slider-value {
+    font-family: var(--font-sans);
+}
+
+/* ── Slider Controls ───────────────────────────────────────────────── */
+html[data-theme="modern"] input[type="range"]::-webkit-slider-runnable-track {
+    border-radius: var(--radius-pill);
+}
+
+html[data-theme="modern"] input[type="range"]::-webkit-slider-thumb {
+    box-shadow: var(--shadow-sm);
+}
+
+/* ── Tool Messages ─────────────────────────────────────────────────── */
+html[data-theme="modern"] .tool-message {
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+}
+
+html[data-theme="modern"] .tool-message-input {
+    font-family: var(--font-sans);
+}
+
+/* ── Theme Picker (in Settings) ────────────────────────────────────── */
+.theme-picker {
+    display: flex;
+    gap: 12px;
+}
+
+.theme-option {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: var(--font-sm);
+}
+
+.theme-option:hover {
+    border-color: var(--text-muted);
+    background: var(--bg-hover);
+}
+
+.theme-option.active {
+    border-color: var(--accent-cyan);
+    color: var(--text-primary);
+}
+
+.theme-preview {
+    width: 100%;
+    height: 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+}
+
+.theme-preview-sidebar {
+    width: 30%;
+    height: 100%;
+}
+
+.theme-preview-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    gap: 3px;
+}
+
+.theme-preview-msg {
+    border-radius: 2px;
+    height: 6px;
+    width: 80%;
+}
+
+.theme-preview-msg:nth-child(2) {
+    width: 60%;
+}
+
+.theme-preview-input {
+    margin-top: auto;
+    height: 6px;
+    border-radius: 2px;
+    width: 100%;
+}
+
+/* Retro preview colors */
+.retro-preview .theme-preview-sidebar { background: #0d1526; }
+.retro-preview .theme-preview-main { background: #0a0f1a; }
+.retro-preview .theme-preview-msg { background: #1e3a5f; }
+.retro-preview .theme-preview-input { background: #111d33; }
+
+/* Modern preview colors */
+.modern-preview .theme-preview-sidebar { background: #1f1f23; }
+.modern-preview .theme-preview-main { background: #18181b; }
+.modern-preview .theme-preview-msg { background: #333338; border-radius: 4px; }
+.modern-preview .theme-preview-input { background: #27272a; border-radius: 4px; }

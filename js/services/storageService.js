@@ -82,6 +82,7 @@ class StorageService {
 
     getDefaultSettings() {
         return {
+            theme: 'retro',
             selectedProvider: 'ollama',
             selectedModel: null,
             thinkingCollapsed: true,
