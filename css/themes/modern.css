@@ -394,28 +394,12 @@ html[data-theme="modern"] .settings-header h2 {
     font-family: var(--font-sans);
 }
 
-html[data-theme="modern"] .settings-tabs {
-    scrollbar-width: thin;
-    scrollbar-color: var(--text-muted) transparent;
-}
-
-html[data-theme="modern"] .settings-tabs::-webkit-scrollbar {
-    display: block;
-    height: 3px;
-}
-
-html[data-theme="modern"] .settings-tabs::-webkit-scrollbar-thumb {
-    background: var(--text-muted);
-    border-radius: var(--radius-pill);
-}
-
-html[data-theme="modern"] .settings-tabs::-webkit-scrollbar-track {
-    background: transparent;
-}
-
 html[data-theme="modern"] .settings-tab {
     font-family: var(--font-sans);
     border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: var(--font-xs);
+    gap: 4px;
 }
 
 html[data-theme="modern"] .settings-tab.active {
