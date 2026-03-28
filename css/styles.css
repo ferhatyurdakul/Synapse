@@ -2151,14 +2151,14 @@ body::before {
 .settings-tab {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
+    gap: 4px;
+    padding: 8px 10px;
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: var(--text-muted);
     font-family: var(--font-family);
-    font-size: var(--font-sm);
+    font-size: var(--font-xs);
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
