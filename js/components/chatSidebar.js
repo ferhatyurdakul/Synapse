@@ -316,18 +316,16 @@ class ChatSidebar {
         eventBus.on(Events.CHAT_SELECTED, () => {
             this.updateExportButtonState();
         });
+
+        eventBus.on(Events.CHAT_FORKED, () => {
+            this.refreshChatList();
+            this.updateExportButtonState();
+        });
     }
 
     createNewChat() {
-        // Fallback: read from the DOM selector if event hasn't fired yet
-        if (!this.selectedModel) {
-            const modelSelect = document.getElementById('model-select');
-            if (modelSelect && modelSelect.value) {
-                this.selectedModel = modelSelect.value;
-            }
-        }
-
-        chatService.createChat(this.selectedModel || null);
+        chatService.deselectChat();
+        this.refreshChatList();
     }
 
     toggleSidebar() {
@@ -417,12 +415,27 @@ class ChatSidebar {
             return;
         }
 
+        // Separate root chats from branches
+        const rootChats = [];
+        const branchMap = new Map(); // parentChatId -> branch chats[]
+        const allVisibleIds = new Set(chats.map(c => c.id));
+
+        for (const chat of chats) {
+            if (chat.parentChatId && !query && allVisibleIds.has(chat.parentChatId)) {
+                // Group under parent when not searching and parent is visible
+                if (!branchMap.has(chat.parentChatId)) branchMap.set(chat.parentChatId, []);
+                branchMap.get(chat.parentChatId).push(chat);
+            } else {
+                rootChats.push(chat);
+            }
+        }
+
         // Group chats by folder
         const folders = chatService.getAllFolders();
         const folderChats = new Map(); // folderId -> chats[]
         const unfolderedChats = [];
 
-        for (const chat of chats) {
+        for (const chat of rootChats) {
             if (chat.folderId && chatService.getFolder(chat.folderId)) {
                 if (!folderChats.has(chat.folderId)) folderChats.set(chat.folderId, []);
                 folderChats.get(chat.folderId).push(chat);
@@ -435,6 +448,16 @@ class ChatSidebar {
         const folderMenuOptions = folders.map(f =>
             `<div class="folder-menu-item" data-folder-id="${f.id}">${escapeHtml(f.name)}</div>`
         ).join('');
+
+        // Recursive helper to render a chat and its nested branches
+        const renderWithBranches = (chat, isBranch = false) => {
+            let itemHtml = this.renderChatItem(chat, currentId, query, searchResults, folderMenuOptions, isBranch);
+            const branches = branchMap.get(chat.id);
+            if (branches) {
+                itemHtml += branches.map(b => renderWithBranches(b, true)).join('');
+            }
+            return itemHtml;
+        };
 
         let html = '';
 
@@ -461,14 +484,14 @@ class ChatSidebar {
                         </div>
                     </div>
                     <div class="folder-contents ${folder.collapsed && !query ? 'hidden' : ''}">
-                        ${fChats.map(chat => this.renderChatItem(chat, currentId, query, searchResults, folderMenuOptions)).join('')}
+                        ${fChats.map(chat => renderWithBranches(chat)).join('')}
                     </div>
                 </div>
             `;
         }
 
         // Render unfoldered chats
-        html += unfolderedChats.map(chat => this.renderChatItem(chat, currentId, query, searchResults, folderMenuOptions)).join('');
+        html += unfolderedChats.map(chat => renderWithBranches(chat)).join('');
 
         listEl.innerHTML = html;
         this.attachChatItemHandlers(listEl);
@@ -477,7 +500,7 @@ class ChatSidebar {
         refreshIcons();
     }
 
-    renderChatItem(chat, currentId, query, searchResults, folderMenuOptions) {
+    renderChatItem(chat, currentId, query, searchResults, folderMenuOptions, isBranch = false) {
         const title = query
             ? this.highlightMatch(escapeHtml(chat.title), query)
             : escapeHtml(chat.title);
@@ -491,9 +514,13 @@ class ChatSidebar {
             }
         }
 
+        const branchClass = isBranch ? ' branch-chat' : '';
+        const branchIcon = isBranch ? '<i data-lucide="git-branch" class="icon branch-icon"></i>' : '';
+
         return `
-            <div class="chat-item ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}" draggable="true">
+            <div class="chat-item${branchClass} ${chat.id === currentId ? 'active' : ''}" data-id="${chat.id}" draggable="true">
                 <div class="chat-item-content">
+                    ${branchIcon}
                     <div class="chat-item-text">
                         <span class="chat-title">${title}</span>
                         ${snippetHtml}
@@ -585,13 +612,9 @@ class ChatSidebar {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const folderId = btn.dataset.folderId;
-                if (!this.selectedModel) {
-                    toast.warning('Select a model first');
-                    return;
-                }
-                const chatId = chatService.createChat(this.selectedModel);
-                chatService.moveChatToFolder(chatId, folderId);
-                chatService.selectChat(chatId);
+                chatService.pendingFolderId = folderId;
+                chatService.deselectChat();
+                this.refreshChatList();
             });
         });
 

@@ -97,6 +97,7 @@ export const Events = {
     CHAT_SELECTED: 'chat:selected',
     CHAT_DELETED: 'chat:deleted',
     CHAT_UPDATED: 'chat:updated',
+    CHAT_FORKED: 'chat:forked',
     TITLE_GENERATED: 'chat:titleGenerated',
 
     // Message events

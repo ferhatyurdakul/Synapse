@@ -209,6 +209,27 @@ class ChatView {
             const newContent = textarea.value.trim();
             if (!newContent) return;
 
+            // Auto-branch: create a new branch with the edit, keep original untouched
+            const settings = storageService.loadSettings();
+            if (settings.branchOnEdit) {
+                const lastMsgIndex = chat.messages.length - 1;
+                const lastMsgId = chat.messages[lastMsgIndex].id;
+                const branchId = await chatService.forkChat(chat.id, lastMsgId);
+                chatService.selectChat(branchId);
+                const branchChat = chatService.getCurrentChat();
+
+                // Find the same message index in the branch and apply the edit there
+                chatService.updateMessage(index, newContent);
+                chatService.truncateFromMessage(index + 1);
+
+                this.displayChat(branchChat);
+
+                if (this.endsWithUserMessage(branchChat)) {
+                    await this.streamResponse();
+                }
+                return;
+            }
+
             // Update the message and truncate everything after it
             chatService.updateMessage(index, newContent);
             chatService.truncateFromMessage(index + 1);
@@ -243,6 +264,17 @@ class ChatView {
             if (this.endsWithUserMessage(chat)) {
                 await this.streamResponse();
             }
+        });
+
+        // Branch from here
+        window.addEventListener('branch-from-here', async (e) => {
+            const { index } = e.detail;
+            const chat = chatService.getCurrentChat();
+            if (!chat || index < 0 || index >= chat.messages.length) return;
+
+            const messageId = chat.messages[index].id;
+            const newChatId = await chatService.forkChat(chat.id, messageId);
+            chatService.selectChat(newChatId);
         });
     }
 
@@ -324,18 +356,25 @@ class ChatView {
     }
 
     async handleUserMessage(content, images = null, documents = null) {
-        // Ensure we have a chat
+        // Ensure we have a chat — create on first message, not on "New Chat" click
         if (!chatService.getCurrentChat()) {
             if (!this.selectedModel) {
                 console.error('No model selected');
                 return;
             }
+            const pendingFolder = chatService.pendingFolderId;
             chatService.createChat(this.selectedModel);
+            if (pendingFolder) {
+                chatService.moveChatToFolder(chatService.getCurrentChatId(), pendingFolder);
+                chatService.pendingFolderId = null;
+            }
         }
 
         // Add user message with images and documents
         chatService.addMessage('user', content, '', null, images, documents);
-        this.appendMessage('user', content, '', true, null, -1, null, images, documents);
+        const chat = chatService.getCurrentChat();
+        const userMsgIndex = chat.messages.length - 1;
+        this.appendMessage('user', content, '', true, null, userMsgIndex, null, images, documents);
         this.scrollToBottom(true);
 
         // Start streaming response
@@ -655,6 +694,11 @@ class ChatView {
         this.currentStreamEl = null;
         this.currentThinkingBlock = null;
         eventBus.emit(Events.STREAM_END, { aborted: false, chatId: streamChatId });
+
+        // Re-render to show all action buttons with correct indexes
+        if (chatService.getCurrentChatId() === streamChatId) {
+            this.displayChat(chatService.getCurrentChat());
+        }
     }
     buildMessageStats(result) {
         if (!result || !result.evalCount) return null;
@@ -721,6 +765,10 @@ class ChatView {
 
         // Build action buttons based on role
         let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy" aria-label="Copy"><i data-lucide="copy" class="icon"></i></button>`;
+
+        if (role === 'assistant' && msgIndex >= 0) {
+            actionButtons += `<button class="message-action-btn branch-btn" onclick="branchFromHere(${msgIndex})" title="Branch from here" aria-label="Branch from here"><i data-lucide="git-branch" class="icon"></i></button>`;
+        }
 
         if (role === 'user' && msgIndex >= 0) {
             actionButtons += `<button class="message-action-btn edit-btn" onclick="editMessage(${msgIndex})" title="Edit message" aria-label="Edit message"><i data-lucide="pencil" class="icon"></i></button>`;

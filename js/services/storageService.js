@@ -92,6 +92,7 @@ class StorageService {
             titleEnabled: true,
             summarizationEnabled: true,
             toolsEnabled: true,
+            branchOnEdit: false,
             systemPrompt: '',
             ragEmbeddingsModelOllama: '',
             ragEmbeddingsModelLmstudio: '',

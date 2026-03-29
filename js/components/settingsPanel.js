@@ -135,6 +135,19 @@ class SettingsPanel {
                                 </div>
                             `).join('')}
                         </div>
+
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Branch on Edit</h3>
+                                    <p class="settings-description">Automatically create a branch of the conversation before applying a message edit, preserving the original thread.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="branch-on-edit-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Models Tab -->
@@ -663,6 +676,9 @@ class SettingsPanel {
         // Load tools toggle
         document.getElementById('tools-enabled-toggle').checked = settings.toolsEnabled !== false;
 
+        // Load branch on edit toggle
+        document.getElementById('branch-on-edit-toggle').checked = settings.branchOnEdit === true;
+
         // Load RAG settings — load both providers in parallel
         await this.loadAllEmbeddingModels();
         document.getElementById('rag-chunk-size').value = settings.ragChunkSize || 512;
@@ -987,6 +1003,7 @@ class SettingsPanel {
             const sysPromptInput = document.getElementById('system-prompt-input');
             if (sysPromptInput) settings.systemPrompt = sysPromptInput.value.trim();
             settings.toolsEnabled = document.getElementById('tools-enabled-toggle').checked;
+            settings.branchOnEdit = document.getElementById('branch-on-edit-toggle').checked;
             settings.titleEnabled = document.getElementById('title-enabled-toggle').checked;
             settings.summarizationEnabled = document.getElementById('summ-enabled-toggle').checked;
             settings.searchProvider = document.getElementById('search-provider-select').value;

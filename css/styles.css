@@ -588,6 +588,32 @@ body::before {
     color: var(--text-primary);
 }
 
+/* Branch chat items */
+.chat-item.branch-chat {
+    margin-left: 16px;
+    border-left: 2px solid var(--border-color);
+    border-radius: 0 2px 2px 0;
+}
+
+.chat-item.branch-chat:hover {
+    border-left-color: var(--accent-cyan);
+}
+
+.chat-item.branch-chat.active {
+    border-left-color: var(--accent-cyan);
+}
+
+.branch-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.branch-btn:hover {
+    color: var(--accent-cyan);
+}
+
 .chat-item-actions {
     display: none;
     align-items: center;

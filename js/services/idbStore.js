@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -22,7 +22,8 @@ const STORES = {
         keyPath: 'id',
         indexes: [
             { name: 'updatedAt', keyPath: 'updatedAt' },
-            { name: 'folderId', keyPath: 'folderId' }
+            { name: 'folderId', keyPath: 'folderId' },
+            { name: 'parentChatId', keyPath: 'parentChatId' }
         ]
     },
     messages: {
@@ -94,11 +95,19 @@ export function openDatabase() {
 
             for (const [storeName, config] of Object.entries(STORES)) {
                 const storeVersion = config.version || 1;
-                // Only create stores that are new relative to the old version
                 if (storeVersion > oldVersion && !db.objectStoreNames.contains(storeName)) {
+                    // Create new stores
                     const store = db.createObjectStore(storeName, { keyPath: config.keyPath });
                     if (config.indexes) {
                         for (const idx of config.indexes) {
+                            store.createIndex(idx.name, idx.keyPath, idx.options || {});
+                        }
+                    }
+                } else if (db.objectStoreNames.contains(storeName) && config.indexes) {
+                    // Add missing indexes to existing stores
+                    const store = event.currentTarget.transaction.objectStore(storeName);
+                    for (const idx of config.indexes) {
+                        if (!store.indexNames.contains(idx.name)) {
                             store.createIndex(idx.name, idx.keyPath, idx.options || {});
                         }
                     }

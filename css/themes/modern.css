@@ -121,6 +121,10 @@ html[data-theme="modern"] .chat-item.active {
     background: rgba(109, 159, 255, 0.1);
 }
 
+html[data-theme="modern"] .chat-item.branch-chat {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
 html[data-theme="modern"] .chat-title {
     font-family: var(--font-sans);
     font-size: var(--font-sm);

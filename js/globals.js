@@ -73,6 +73,11 @@ window.regenerateFromHere = function (index) {
     window.dispatchEvent(new CustomEvent('regenerate-from-here', { detail: { index } }));
 };
 
+// Branch from here
+window.branchFromHere = function (index) {
+    window.dispatchEvent(new CustomEvent('branch-from-here', { detail: { index } }));
+};
+
 // ── Throttled Lucide icon refresh ──
 // Deduplicates rapid createIcons() calls using microtask batching
 window.refreshIcons = (function () {

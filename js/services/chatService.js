@@ -34,6 +34,7 @@ class ChatService {
         this.chats = {};
         this.folders = {};
         this.currentChatId = null;
+        this.pendingFolderId = null;
         // Do NOT call load() here — app.js will call it after storageService.init()
     }
 
@@ -115,6 +116,8 @@ class ChatService {
             summary: null,
             summarizedUpTo: 0,
             lastTokenCount: 0,
+            parentChatId: null,
+            forkedFromMessageId: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -155,6 +158,14 @@ class ChatService {
                 chat: this.chats[chatId]
             });
         }
+    }
+
+    /**
+     * Deselect current chat (show welcome/new chat screen)
+     */
+    deselectChat() {
+        this.currentChatId = null;
+        eventBus.emit(Events.CHAT_SELECTED, { id: null, chat: null });
     }
 
     /**
@@ -359,6 +370,13 @@ class ChatService {
      */
     deleteChat(chatId) {
         if (this.chats[chatId]) {
+            // Orphan any branches so they become standalone root chats
+            for (const branch of this.getBranchesOf(chatId)) {
+                branch.parentChatId = null;
+                branch.forkedFromMessageId = null;
+                this._persistChat(branch);
+            }
+
             delete this.chats[chatId];
 
             if (this.currentChatId === chatId) {
@@ -393,6 +411,107 @@ class ChatService {
             e => console.error('Failed to clear chats:', e)
         );
         eventBus.emit(Events.CHAT_DELETED, { id: null, all: true });
+    }
+
+    /**
+     * Get all branches (child chats) of a given chat.
+     * @param {string} chatId
+     * @returns {Object[]} Branch chats sorted by createdAt
+     */
+    getBranchesOf(chatId) {
+        return Object.values(this.chats)
+            .filter(c => c.parentChatId === chatId)
+            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    }
+
+    /**
+     * Fork a chat from a specific message, creating a new branch.
+     * Copies messages up to and including the fork point message.
+     * @param {string} sourceChatId - Chat to fork from
+     * @param {string} fromMessageId - Message ID at the fork point
+     * @param {Object} [options] - { silent: boolean } - if silent, don't switch to the new chat
+     * @returns {Promise<string>} New branch chat ID
+     */
+    async forkChat(sourceChatId, fromMessageId, options) {
+        const source = this.chats[sourceChatId];
+        if (!source) throw new Error('Source chat not found');
+
+        const msgIndex = source.messages.findIndex(m => m.id === fromMessageId);
+        if (msgIndex < 0) throw new Error('Fork-point message not found');
+
+        const id = generateId();
+        const now = new Date().toISOString();
+
+        // Deep-clone messages up to the fork point with new IDs
+        const oldToNewMsgId = new Map();
+        const clonedMessages = source.messages.slice(0, msgIndex + 1).map(msg => {
+            const newMsgId = generateId();
+            oldToNewMsgId.set(msg.id, newMsgId);
+            const clone = { ...msg, id: newMsgId };
+            // Clone arrays so they're independent
+            if (clone.images) clone.images = [...clone.images];
+            if (clone.documents) clone.documents = [...clone.documents];
+            if (clone.attachmentIds) clone.attachmentIds = [...clone.attachmentIds];
+            return clone;
+        });
+
+        // Build the title
+        const titleBase = source.title || 'New Chat';
+        const branchTitle = `Branch: ${titleBase}`.slice(0, 60);
+
+        this.chats[id] = {
+            id,
+            title: branchTitle,
+            model: source.model,
+            provider: source.provider,
+            messages: clonedMessages,
+            summary: null,
+            summarizedUpTo: 0,
+            lastTokenCount: 0,
+            parentChatId: sourceChatId,
+            forkedFromMessageId: fromMessageId,
+            folderId: source.folderId || undefined,
+            createdAt: now,
+            updatedAt: now
+        };
+
+        // Persist chat metadata
+        this._persistChat(this.chats[id]);
+
+        // Persist messages
+        for (const msg of clonedMessages) {
+            storageService.saveMessage(id, msg);
+        }
+
+        // Duplicate image attachments from source chat
+        try {
+            const sourceAttachments = await storageService.getAttachmentsForChat(sourceChatId);
+            for (const att of sourceAttachments) {
+                const newMsgId = oldToNewMsgId.get(att.messageId);
+                if (!newMsgId) continue; // attachment belongs to a message after the fork point
+                const newAttId = storageService._generateId();
+                await storageService.saveAttachment(newAttId, id, newMsgId, att.blob, att.mimeType);
+
+                // Update the cloned message's attachmentIds
+                const clonedMsg = clonedMessages.find(m => m.id === newMsgId);
+                if (clonedMsg?.attachmentIds) {
+                    const oldIdx = clonedMsg.attachmentIds.indexOf(att.id);
+                    if (oldIdx >= 0) clonedMsg.attachmentIds[oldIdx] = newAttId;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to duplicate attachments for branch:', e);
+        }
+
+        eventBus.emit(Events.CHAT_FORKED, { id, parentChatId: sourceChatId, forkedFromMessageId: fromMessageId });
+        eventBus.emit(Events.CHAT_CREATED, { id, chat: this.chats[id] });
+
+        // Select the new branch unless caller opts out
+        if (!options?.silent) {
+            this.currentChatId = id;
+        }
+
+        return id;
     }
 
     /**
