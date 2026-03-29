@@ -75,22 +75,22 @@ class ChatSidebar {
                     </div>
                     <div id="filter-panel" class="filter-panel hidden">
                         <div class="filter-flags">
-                            <button class="filter-flag-btn" data-flag="images">
-                                <i data-lucide="image" class="icon"></i> Images
-                            </button>
-                            <button class="filter-flag-btn" data-flag="docs">
-                                <i data-lucide="file-text" class="icon"></i> Docs
-                            </button>
                             <button class="filter-flag-btn" data-flag="code">
                                 <i data-lucide="code" class="icon"></i> Code
                             </button>
-                        </div>
-                        <div class="filter-flags">
                             <button class="filter-flag-btn" data-flag="math">
                                 <i data-lucide="function-square" class="icon"></i> Math
                             </button>
                             <button class="filter-flag-btn" data-flag="search">
                                 <i data-lucide="globe" class="icon"></i> Search
+                            </button>
+                        </div>
+                        <div class="filter-flags">
+                            <button class="filter-flag-btn" data-flag="images">
+                                <i data-lucide="image" class="icon"></i> Images
+                            </button>
+                            <button class="filter-flag-btn" data-flag="docs">
+                                <i data-lucide="file-text" class="icon"></i> Docs
                             </button>
                         </div>
                         <div class="filter-field">
