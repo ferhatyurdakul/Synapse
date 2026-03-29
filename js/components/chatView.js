@@ -2,18 +2,18 @@
  * ChatView - Main chat display component with streaming support
  */
 
-import { chatService } from '../services/chatService.js?v=36';
-import { contextService } from '../services/contextService.js?v=36';
-import { storageService } from '../services/storageService.js?v=36';
-import { providerManager } from '../services/providerManager.js?v=36';
-import { titleService } from '../services/titleService.js?v=36';
-import { toolRegistry } from '../services/toolRegistry.js?v=36';
-import { ragService } from '../services/ragService.js?v=36';
-import { eventBus, Events } from '../utils/eventBus.js?v=36';
-import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js?v=36';
-import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js?v=36';
-import { getModelParams } from './settingsPanel.js?v=36';
-import { toast } from './toast.js?v=36';
+import { chatService } from '../services/chatService.js';
+import { contextService } from '../services/contextService.js';
+import { storageService } from '../services/storageService.js';
+import { providerManager } from '../services/providerManager.js';
+import { titleService } from '../services/titleService.js';
+import { toolRegistry } from '../services/toolRegistry.js';
+import { ragService } from '../services/ragService.js';
+import { eventBus, Events } from '../utils/eventBus.js';
+import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js';
+import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js';
+import { getModelParams } from './settingsPanel.js';
+import { toast } from './toast.js';
 
 const PROMPT_EXAMPLES = [
     { icon: '💡', text: 'Explain quantum computing in simple terms' },

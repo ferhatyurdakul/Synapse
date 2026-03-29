@@ -3,20 +3,20 @@
  * Initializes and coordinates all components
  */
 
-import { createModelSelector } from './components/modelSelector.js?v=36';
-import { createChatSidebar } from './components/chatSidebar.js?v=37';
-import { createChatView } from './components/chatView.js?v=36';
-import { createInputArea } from './components/inputArea.js?v=36';
-import { createSettingsPanel } from './components/settingsPanel.js?v=37';
-import { createContextMeter } from './components/contextMeter.js?v=36';
-import { storageService } from './services/storageService.js?v=36';
-import { chatService } from './services/chatService.js?v=36';
-import { providerManager } from './services/providerManager.js?v=36';
-import { eventBus, Events } from './utils/eventBus.js?v=36';
-import { toast } from './components/toast.js?v=36';
-import { themeService } from './services/themeService.js?v=36';
-import './tools/builtins.js?v=36'; // registers built-in tools into toolRegistry
-import './tools/webSearch.js?v=36'; // registers web search tool
+import { createModelSelector } from './components/modelSelector.js';
+import { createChatSidebar } from './components/chatSidebar.js';
+import { createChatView } from './components/chatView.js';
+import { createInputArea } from './components/inputArea.js';
+import { createSettingsPanel } from './components/settingsPanel.js';
+import { createContextMeter } from './components/contextMeter.js';
+import { storageService } from './services/storageService.js';
+import { chatService } from './services/chatService.js';
+import { providerManager } from './services/providerManager.js';
+import { eventBus, Events } from './utils/eventBus.js';
+import { toast } from './components/toast.js';
+import { themeService } from './services/themeService.js';
+import './tools/builtins.js'; // registers built-in tools into toolRegistry
+import './tools/webSearch.js'; // registers web search tool
 
 class App {
     constructor() {

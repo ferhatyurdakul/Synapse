@@ -3,8 +3,8 @@
  * Supports multiple providers (Ollama, LM Studio)
  */
 
-import { providerManager } from './providerManager.js?v=36';
-import { storageService } from './storageService.js?v=36';
+import { providerManager } from './providerManager.js';
+import { storageService } from './storageService.js';
 
 const TITLE_PROMPT = `### Task:
 Generate a concise, 3-5 word title with an emoji summarizing the chat history.

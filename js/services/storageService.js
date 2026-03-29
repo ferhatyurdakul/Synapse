@@ -17,7 +17,7 @@ import {
     putRecord, putRecords, getRecord, getAllRecords,
     getRecordsByIndex, deleteRecord, deleteByIndex,
     clearStore, countRecords
-} from './idbStore.js?v=36';
+} from './idbStore.js';
 
 // localStorage keys (used only for migration detection + fallback)
 const LS_PREFIX = 'synapse_';

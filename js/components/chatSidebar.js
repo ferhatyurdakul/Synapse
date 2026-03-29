@@ -3,13 +3,13 @@
  * Handles chat list, new chat, import/export
  */
 
-import { chatService } from '../services/chatService.js?v=36';
-import { storageService } from '../services/storageService.js?v=36';
-import { providerManager } from '../services/providerManager.js?v=36';
-import { eventBus, Events } from '../utils/eventBus.js?v=36';
-import { openSettings } from './settingsPanel.js?v=36';
-import { renderMarkdown, escapeHtml } from '../utils/markdown.js?v=36';
-import { toast } from './toast.js?v=36';
+import { chatService } from '../services/chatService.js';
+import { storageService } from '../services/storageService.js';
+import { providerManager } from '../services/providerManager.js';
+import { eventBus, Events } from '../utils/eventBus.js';
+import { openSettings } from './settingsPanel.js';
+import { renderMarkdown, escapeHtml } from '../utils/markdown.js';
+import { toast } from './toast.js';
 
 class ChatSidebar {
     constructor(containerId) {
@@ -26,8 +26,7 @@ class ChatSidebar {
             containsMath: false,
             containsImages: false,
             containsDocs: false,
-            containsSearch: false,
-            containsThinking: false
+            containsSearch: false
         };
         this.collapsed = storageService.loadSidebarState();
 
@@ -92,9 +91,6 @@ class ChatSidebar {
                             </button>
                             <button class="filter-flag-btn" data-flag="search">
                                 <i data-lucide="globe" class="icon"></i> Search
-                            </button>
-                            <button class="filter-flag-btn" data-flag="thinking">
-                                <i data-lucide="brain" class="icon"></i> Thinking
                             </button>
                         </div>
                         <div class="filter-field">
@@ -232,7 +228,7 @@ class ChatSidebar {
 
         // Clear filters
         document.getElementById('filter-clear-btn').addEventListener('click', () => {
-            this.filters = { provider: '', model: '', dateRange: '', containsCode: false, containsMath: false, containsImages: false, containsDocs: false, containsSearch: false, containsThinking: false };
+            this.filters = { provider: '', model: '', dateRange: '', containsCode: false, containsMath: false, containsImages: false, containsDocs: false, containsSearch: false };
             document.getElementById('filter-provider').value = '';
             document.getElementById('filter-model').value = '';
             document.getElementById('filter-date').value = '';
@@ -260,7 +256,6 @@ class ChatSidebar {
                 else if (flag === 'images') this.filters.containsImages = active;
                 else if (flag === 'docs') this.filters.containsDocs = active;
                 else if (flag === 'search') this.filters.containsSearch = active;
-                else if (flag === 'thinking') this.filters.containsThinking = active;
 
                 this.updateFilterIndicator();
                 this.refreshChatList();
@@ -388,9 +383,6 @@ class ChatSidebar {
         }
         if (this.filters.containsSearch) {
             chats = chats.filter(chat => chat.messages.some(msg => msg.role === 'tool' && msg.toolName && msg.toolName.toLowerCase().includes('search')));
-        }
-        if (this.filters.containsThinking) {
-            chats = chats.filter(chat => chat.messages.some(msg => msg.thinking && msg.thinking.length > 0));
         }
 
         // Text search
@@ -701,8 +693,7 @@ class ChatSidebar {
             this.filters.containsMath ||
             this.filters.containsImages ||
             this.filters.containsDocs ||
-            this.filters.containsSearch ||
-            this.filters.containsThinking;
+            this.filters.containsSearch;
         document.getElementById('filter-toggle-btn').classList.toggle('has-filters', !!hasActive);
         document.getElementById('filter-clear-btn').classList.toggle('hidden', !hasActive);
     }

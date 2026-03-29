@@ -3,10 +3,10 @@
  * Coordinates between UI, storage (IndexedDB), and providers
  */
 
-import { storageService } from './storageService.js?v=36';
-import { contextService } from './contextService.js?v=36';
-import { providerManager } from './providerManager.js?v=36';
-import { eventBus, Events } from '../utils/eventBus.js?v=36';
+import { storageService } from './storageService.js';
+import { contextService } from './contextService.js';
+import { providerManager } from './providerManager.js';
+import { eventBus, Events } from '../utils/eventBus.js';
 
 /**
  * Generate unique ID for chats

@@ -8,8 +8,8 @@
  * float vectors. This service normalises the response into Float32Arrays.
  */
 
-import { providerManager } from './providerManager.js?v=36';
-import { storageService } from './storageService.js?v=36';
+import { providerManager } from './providerManager.js';
+import { storageService } from './storageService.js';
 
 class EmbeddingsService {
     constructor() {

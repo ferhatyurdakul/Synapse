@@ -3,13 +3,13 @@
  * Supports per-model parameter configuration with multi-provider support
  */
 
-import { titleService } from '../services/titleService.js?v=36';
-import { contextService } from '../services/contextService.js?v=36';
-import { providerManager } from '../services/providerManager.js?v=36';
-import { storageService } from '../services/storageService.js?v=36';
-import { eventBus, Events } from '../utils/eventBus.js?v=36';
-import { toast } from './toast.js?v=36';
-import { themeService } from '../services/themeService.js?v=36';
+import { titleService } from '../services/titleService.js';
+import { contextService } from '../services/contextService.js';
+import { providerManager } from '../services/providerManager.js';
+import { storageService } from '../services/storageService.js';
+import { eventBus, Events } from '../utils/eventBus.js';
+import { toast } from './toast.js';
+import { themeService } from '../services/themeService.js';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -628,7 +628,7 @@ class SettingsPanel {
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - days);
 
-            const { chatService } = await import('../services/chatService.js?v=36');
+            const { chatService } = await import('../services/chatService.js');
             const allChats = chatService.getAllChats();
             const oldChats = allChats.filter(c => new Date(c.updatedAt) < cutoff);
 

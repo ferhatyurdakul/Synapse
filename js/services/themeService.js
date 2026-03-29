@@ -6,7 +6,7 @@
  * Settings are mirrored to localStorage for flash-free page loads.
  */
 
-import { storageService } from './storageService.js?v=36';
+import { storageService } from './storageService.js';
 
 const THEMES = [
     { id: 'retro', label: 'Retro' },

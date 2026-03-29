@@ -8,10 +8,10 @@
 import {
     putRecord, putRecords, getRecord, getAllRecords,
     getRecordsByIndex, deleteRecord, deleteByIndex, countRecords
-} from './idbStore.js?v=36';
-import { embeddingsService } from './embeddingsService.js?v=36';
-import { storageService } from './storageService.js?v=36';
-import { eventBus, Events } from '../utils/eventBus.js?v=36';
+} from './idbStore.js';
+import { embeddingsService } from './embeddingsService.js';
+import { storageService } from './storageService.js';
+import { eventBus, Events } from '../utils/eventBus.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

@@ -21,6 +21,12 @@ BRAVE_API_BASE = "https://api.search.brave.com"
 
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Prevent caching for JS/CSS so changes are picked up immediately
+        if self.path and (self.path.endswith(('.js', '.css')) or '.js?' in self.path or '.css?' in self.path):
+            self.send_header('Cache-Control', 'no-cache, must-revalidate')
+        super().end_headers()
+
     def do_GET(self):
         if self.path.startswith("/api/brave/"):
             self._proxy_brave()
