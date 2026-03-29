@@ -4,7 +4,7 @@
  */
 
 import { createModelSelector } from './components/modelSelector.js?v=36';
-import { createChatSidebar } from './components/chatSidebar.js?v=36';
+import { createChatSidebar } from './components/chatSidebar.js?v=37';
 import { createChatView } from './components/chatView.js?v=36';
 import { createInputArea } from './components/inputArea.js?v=36';
 import { createSettingsPanel } from './components/settingsPanel.js?v=37';

@@ -23,7 +23,11 @@ class ChatSidebar {
             model: '',
             dateRange: '',
             containsCode: false,
-            containsMath: false
+            containsMath: false,
+            containsImages: false,
+            containsDocs: false,
+            containsSearch: false,
+            containsThinking: false
         };
         this.collapsed = storageService.loadSidebarState();
 
@@ -72,11 +76,25 @@ class ChatSidebar {
                     </div>
                     <div id="filter-panel" class="filter-panel hidden">
                         <div class="filter-flags">
+                            <button class="filter-flag-btn" data-flag="images">
+                                <i data-lucide="image" class="icon"></i> Images
+                            </button>
+                            <button class="filter-flag-btn" data-flag="docs">
+                                <i data-lucide="file-text" class="icon"></i> Docs
+                            </button>
                             <button class="filter-flag-btn" data-flag="code">
                                 <i data-lucide="code" class="icon"></i> Code
                             </button>
+                        </div>
+                        <div class="filter-flags">
                             <button class="filter-flag-btn" data-flag="math">
                                 <i data-lucide="function-square" class="icon"></i> Math
+                            </button>
+                            <button class="filter-flag-btn" data-flag="search">
+                                <i data-lucide="globe" class="icon"></i> Search
+                            </button>
+                            <button class="filter-flag-btn" data-flag="thinking">
+                                <i data-lucide="brain" class="icon"></i> Thinking
                             </button>
                         </div>
                         <div class="filter-field">
@@ -214,7 +232,7 @@ class ChatSidebar {
 
         // Clear filters
         document.getElementById('filter-clear-btn').addEventListener('click', () => {
-            this.filters = { provider: '', model: '', dateRange: '', containsCode: false, containsMath: false };
+            this.filters = { provider: '', model: '', dateRange: '', containsCode: false, containsMath: false, containsImages: false, containsDocs: false, containsSearch: false, containsThinking: false };
             document.getElementById('filter-provider').value = '';
             document.getElementById('filter-model').value = '';
             document.getElementById('filter-date').value = '';
@@ -236,11 +254,13 @@ class ChatSidebar {
 
                 // Update internal filter state based on data-flag attribute
                 const flag = btn.dataset.flag;
-                if (flag === 'code') {
-                    this.filters.containsCode = btn.classList.contains('active');
-                } else if (flag === 'math') {
-                    this.filters.containsMath = btn.classList.contains('active');
-                }
+                const active = btn.classList.contains('active');
+                if (flag === 'code') this.filters.containsCode = active;
+                else if (flag === 'math') this.filters.containsMath = active;
+                else if (flag === 'images') this.filters.containsImages = active;
+                else if (flag === 'docs') this.filters.containsDocs = active;
+                else if (flag === 'search') this.filters.containsSearch = active;
+                else if (flag === 'thinking') this.filters.containsThinking = active;
 
                 this.updateFilterIndicator();
                 this.refreshChatList();
@@ -359,6 +379,18 @@ class ChatSidebar {
                 if (!msg.content) return false;
                 return msg.content.includes('$') || msg.content.includes('\\[') || msg.content.includes('\\(');
             }));
+        }
+        if (this.filters.containsImages) {
+            chats = chats.filter(chat => chat.messages.some(msg => msg.images && msg.images.length > 0));
+        }
+        if (this.filters.containsDocs) {
+            chats = chats.filter(chat => chat.messages.some(msg => msg.documents && msg.documents.length > 0));
+        }
+        if (this.filters.containsSearch) {
+            chats = chats.filter(chat => chat.messages.some(msg => msg.role === 'tool' && msg.toolName && msg.toolName.toLowerCase().includes('search')));
+        }
+        if (this.filters.containsThinking) {
+            chats = chats.filter(chat => chat.messages.some(msg => msg.thinking && msg.thinking.length > 0));
         }
 
         // Text search
@@ -666,7 +698,11 @@ class ChatSidebar {
             this.filters.date ||
             this.filters.dateRange ||
             this.filters.containsCode ||
-            this.filters.containsMath;
+            this.filters.containsMath ||
+            this.filters.containsImages ||
+            this.filters.containsDocs ||
+            this.filters.containsSearch ||
+            this.filters.containsThinking;
         document.getElementById('filter-toggle-btn').classList.toggle('has-filters', !!hasActive);
         document.getElementById('filter-clear-btn').classList.toggle('hidden', !hasActive);
     }
