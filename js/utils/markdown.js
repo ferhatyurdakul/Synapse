@@ -1,6 +1,6 @@
 /**
  * Markdown - Enhanced markdown to HTML converter with LaTeX support
- * Uses marked.js for markdown and KaTeX for LaTeX math rendering
+ * Uses marked.js for markdown, KaTeX for LaTeX math, and highlight.js for syntax highlighting
  */
 
 // Wait for KaTeX to be ready
@@ -24,6 +24,19 @@ const katexInterval = setInterval(() => {
         clearInterval(katexInterval);
     }
 }, 100);
+
+/**
+ * Get the line numbers setting from storage (sync read).
+ * Defaults to false if storage not yet available.
+ */
+function _lineNumbersEnabled() {
+    try {
+        // storageService is a module singleton; access via dynamic import is too heavy,
+        // so we read directly from the global cache that storageService maintains.
+        if (window._synapseSettingsCache) return !!window._synapseSettingsCache.codeBlockLineNumbers;
+    } catch { /* ignore */ }
+    return false;
+}
 
 /**
  * Configure marked.js with custom renderer
@@ -50,6 +63,9 @@ function getMarkedInstance() {
             lang = language || 'plaintext';
         }
 
+        // Normalize language name for highlight.js
+        lang = lang.trim().toLowerCase() || 'plaintext';
+
         const escapedCode = escapeHtmlForCode(code);
         let encodedCode;
         try {
@@ -58,9 +74,12 @@ function getMarkedInstance() {
             encodedCode = '';
         }
 
+        // Display label (original casing, friendly names)
+        const displayLang = _friendlyLangName(lang);
+
         return `<div class="code-block-container" data-code="${encodedCode}">
             <div class="code-block-header">
-                <span class="code-block-lang">${lang}</span>
+                <span class="code-block-lang">${displayLang}</span>
                 <button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy code"><i data-lucide="copy" class="icon"></i> Copy</button>
             </div>
             <pre><code class="language-${lang}">${escapedCode}</code></pre>
@@ -77,6 +96,57 @@ function getMarkedInstance() {
     });
 
     return marked;
+}
+
+/**
+ * Map technical language identifiers to friendly display names
+ */
+function _friendlyLangName(lang) {
+    const names = {
+        'js': 'JavaScript',
+        'javascript': 'JavaScript',
+        'ts': 'TypeScript',
+        'typescript': 'TypeScript',
+        'py': 'Python',
+        'python': 'Python',
+        'rb': 'Ruby',
+        'ruby': 'Ruby',
+        'sh': 'Shell',
+        'bash': 'Bash',
+        'zsh': 'Zsh',
+        'json': 'JSON',
+        'html': 'HTML',
+        'xml': 'XML',
+        'svg': 'SVG',
+        'css': 'CSS',
+        'scss': 'SCSS',
+        'yaml': 'YAML',
+        'yml': 'YAML',
+        'toml': 'TOML',
+        'md': 'Markdown',
+        'markdown': 'Markdown',
+        'sql': 'SQL',
+        'go': 'Go',
+        'rust': 'Rust',
+        'java': 'Java',
+        'cpp': 'C++',
+        'c': 'C',
+        'cs': 'C#',
+        'csharp': 'C#',
+        'php': 'PHP',
+        'swift': 'Swift',
+        'kotlin': 'Kotlin',
+        'dart': 'Dart',
+        'lua': 'Lua',
+        'r': 'R',
+        'perl': 'Perl',
+        'dockerfile': 'Dockerfile',
+        'makefile': 'Makefile',
+        'plaintext': 'Text',
+        'text': 'Text',
+        '': 'Code'
+    };
+    return names[lang] || lang.toUpperCase();
 }
 
 /**
@@ -255,4 +325,129 @@ export function renderLatexInElement(element) {
         // Queue for when KaTeX is ready
         katexReadyCallbacks.push(() => renderLatexInEl(element));
     }
+}
+
+/**
+ * Apply syntax highlighting and optional line numbers to all code blocks
+ * inside the given element. Call after innerHTML is set and DOM is ready.
+ *
+ * @param {HTMLElement} containerEl - The parent element containing .code-block-container elements
+ * @param {boolean} lineNumbers - Whether to show line numbers
+ */
+export function highlightCodeBlocks(containerEl, lineNumbers = false) {
+    if (!containerEl) return;
+
+    const codeBlocks = containerEl.querySelectorAll('.code-block-container pre code');
+
+    codeBlocks.forEach(codeEl => {
+        // Skip if already highlighted
+        if (codeEl.dataset.highlighted === 'true') return;
+
+        // Apply highlight.js syntax highlighting
+        if (typeof hljs !== 'undefined') {
+            try {
+                // Detect language from class if present
+                const langClass = [...codeEl.classList].find(c => c.startsWith('language-'));
+                const lang = langClass ? langClass.replace('language-', '') : undefined;
+
+                if (lang && lang !== 'plaintext' && hljs.getLanguage(lang)) {
+                    codeEl.classList.add('language-' + lang);
+                    hljs.highlightElement(codeEl);
+                } else if (!lang || lang === 'plaintext') {
+                    // Plaintext — just add the hljs class for consistent styling
+                    codeEl.classList.add('hljs');
+                } else {
+                    // Let highlight.js auto-detect
+                    hljs.highlightElement(codeEl);
+                }
+            } catch (e) {
+                // Graceful fallback — just add hljs class
+                codeEl.classList.add('hljs');
+            }
+        } else {
+            codeEl.classList.add('hljs');
+        }
+
+        codeEl.dataset.highlighted = 'true';
+
+        // Apply line numbers if enabled
+        if (lineNumbers) {
+            _applyLineNumbers(codeEl);
+        }
+    });
+}
+
+/**
+ * Wrap each line of a code block in a span with a line number gutter.
+ * Uses a <table> layout so line numbers are aligned and copy doesn't include them.
+ *
+ * @param {HTMLElement} codeEl - The <code> element inside a <pre>
+ */
+function _applyLineNumbers(codeEl) {
+    if (codeEl.dataset.lineNumbers === 'true') return;
+
+    const pre = codeEl.parentElement;
+    if (!pre) return;
+
+    const html = codeEl.innerHTML;
+    // Split into lines — handle both \n and trailing newlines
+    const lines = html.split('\n');
+    // Remove trailing empty line if the code ended with \n
+    if (lines.length > 1 && lines[lines.length - 1].trim() === '') {
+        lines.pop();
+    }
+
+    const lineCount = lines.length;
+    const padWidth = String(lineCount).length;
+
+    // Build line-numbered structure using CSS table layout
+    // Each line is a row with a gutter cell and a code cell
+    let numberedHtml = '';
+    for (let i = 0; i < lineCount; i++) {
+        const num = String(i + 1).padStart(padWidth, ' ');
+        numberedHtml += `<span class="code-line" data-line="${i + 1}"><span class="code-line-number">${num}</span><span class="code-line-content">${lines[i] || ' '}</span></span>`;
+        if (i < lineCount - 1) {
+            numberedHtml += '\n';
+        }
+    }
+
+    codeEl.innerHTML = numberedHtml;
+    pre.classList.add('line-numbers');
+    codeEl.dataset.lineNumbers = 'true';
+}
+
+/**
+ * Remove line numbers from code blocks inside a container.
+ * Used when the setting is toggled off to restore plain code.
+ *
+ * @param {HTMLElement} containerEl - The parent element
+ */
+export function removeLineNumbers(containerEl) {
+    if (!containerEl) return;
+
+    containerEl.querySelectorAll('.code-block-container pre.line-numbers').forEach(pre => {
+        const codeEl = pre.querySelector('code');
+        if (!codeEl) return;
+
+        // Re-extract plain text from the data-code attribute
+        const container = pre.closest('.code-block-container');
+        if (container && container.dataset.code) {
+            try {
+                const plain = decodeURIComponent(atob(container.dataset.code));
+                codeEl.innerHTML = escapeHtmlForCode(plain);
+                pre.classList.remove('line-numbers');
+                delete codeEl.dataset.lineNumbers;
+
+                // Re-apply syntax highlighting
+                delete codeEl.dataset.highlighted;
+                codeEl.classList.remove('hljs');
+                if (typeof hljs !== 'undefined') {
+                    try {
+                        hljs.highlightElement(codeEl);
+                    } catch { /* ignore */ }
+                }
+                codeEl.dataset.highlighted = 'true';
+            } catch { /* ignore */ }
+        }
+    });
 }

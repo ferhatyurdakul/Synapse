@@ -280,6 +280,54 @@ html[data-theme="modern"] .code-copy-btn {
     border-radius: var(--radius-sm);
 }
 
+/* Language label pill — softer look for modern theme */
+html[data-theme="modern"] .code-block-lang {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    letter-spacing: 0.3px;
+}
+
+/* Modern syntax highlighting — softer palette */
+html[data-theme="modern"] .code-block-container pre {
+    background: #1e1e2e;
+}
+
+html[data-theme="modern"] .hljs-keyword,
+html[data-theme="modern"] .hljs-selector-tag,
+html[data-theme="modern"] .hljs-literal { color: #cba6f7; }
+html[data-theme="modern"] .hljs-string,
+html[data-theme="modern"] .hljs-addition { color: #a6e3a1; }
+html[data-theme="modern"] .hljs-number,
+html[data-theme="modern"] .hljs-built_in { color: #fab387; }
+html[data-theme="modern"] .hljs-comment,
+html[data-theme="modern"] .hljs-quote { color: #6c7086; font-style: italic; }
+html[data-theme="modern"] .hljs-function .hljs-title,
+html[data-theme="modern"] .hljs-title.function_ { color: #89b4fa; }
+html[data-theme="modern"] .hljs-title.class_,
+html[data-theme="modern"] .hljs-class .hljs-title { color: #f9e2af; }
+html[data-theme="modern"] .hljs-attr,
+html[data-theme="modern"] .hljs-variable,
+html[data-theme="modern"] .hljs-params { color: #cdd6f4; }
+html[data-theme="modern"] .hljs-type { color: #89dceb; }
+html[data-theme="modern"] .hljs-meta,
+html[data-theme="modern"] .hljs-tag { color: #cba6f7; }
+html[data-theme="modern"] .hljs-name { color: #89b4fa; }
+html[data-theme="modern"] .hljs-attribute { color: #a6e3a1; }
+html[data-theme="modern"] .hljs-regexp { color: #f9e2af; }
+html[data-theme="modern"] .hljs-symbol,
+html[data-theme="modern"] .hljs-bullet { color: #fab387; }
+html[data-theme="modern"] .hljs-deletion { color: #f38ba8; }
+html[data-theme="modern"] .hljs-selector-class { color: #a6e3a1; }
+html[data-theme="modern"] .hljs-selector-id { color: #fab387; }
+html[data-theme="modern"] .hljs-section { color: #89b4fa; font-weight: bold; }
+html[data-theme="modern"] .hljs-subst { color: #cdd6f4; }
+
+/* Line numbers — modern theme */
+html[data-theme="modern"] .code-line-number {
+    color: #6c7086;
+    opacity: 0.5;
+}
+
 /* ── Welcome Screen ────────────────────────────────────────────────── */
 html[data-theme="modern"] .welcome-message h2 {
     font-family: var(--font-sans);

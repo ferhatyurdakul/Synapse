@@ -10,7 +10,7 @@ import { titleService } from '../services/titleService.js';
 import { toolRegistry } from '../services/toolRegistry.js';
 import { ragService } from '../services/ragService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
-import { renderMarkdown, renderLatexInElement, escapeHtml } from '../utils/markdown.js';
+import { renderMarkdown, renderLatexInElement, highlightCodeBlocks, escapeHtml } from '../utils/markdown.js';
 import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js';
 import { getModelParams } from './settingsPanel.js';
 import { toast } from './toast.js';
@@ -43,6 +43,12 @@ class ChatView {
         this.webSearchEnabled = false;
 
         this.init();
+    }
+
+    /** Apply syntax highlighting + optional line numbers to code blocks inside an element */
+    _highlightCode(containerEl) {
+        const settings = storageService.loadSettings();
+        highlightCodeBlocks(containerEl, !!settings.codeBlockLineNumbers);
     }
 
     init() {
@@ -331,6 +337,7 @@ class ChatView {
             // Restore accumulated content
             if (streamState.fullContent) {
                 contentEl.innerHTML = renderMarkdown(streamState.fullContent);
+                this._highlightCode(contentEl);
                 renderLatexInElement(contentEl);
             }
 
@@ -533,6 +540,7 @@ class ChatView {
                                     streamState._renderPending = false;
                                     if (streamState.contentEl && streamState.fullContent) {
                                         streamState.contentEl.innerHTML = renderMarkdown(streamState.fullContent);
+                                        this._highlightCode(streamState.contentEl);
                                         renderLatexInElement(streamState.contentEl);
                                         this.scrollToBottom();
                                     }
@@ -829,6 +837,7 @@ class ChatView {
 
         // Render LaTeX in the message
         const contentEl = messageEl.querySelector('.message-content');
+        this._highlightCode(contentEl);
         renderLatexInElement(contentEl);
 
         // Initialize Lucide icons
@@ -858,6 +867,8 @@ class ChatView {
         `;
 
         container.appendChild(el);
+        const toolResult = el.querySelector('.tool-message-result');
+        if (toolResult) this._highlightCode(toolResult);
         refreshIcons();
     }
 

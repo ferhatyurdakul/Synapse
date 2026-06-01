@@ -66,6 +66,7 @@ class StorageService {
         // Load caches
         const settingsRec = await getRecord('settings', 'app');
         this._settingsCache = settingsRec?.value || this.getDefaultSettings();
+        window._synapseSettingsCache = this._settingsCache;
 
         const foldersArr = await getAllRecords('folders');
         this._foldersCache = {};
@@ -99,7 +100,8 @@ class StorageService {
             ragChunkSize: 512,
             ragChunkOverlap: 64,
             ragTopK: 5,
-            ragSimilarityThreshold: 0.3
+            ragSimilarityThreshold: 0.3,
+            codeBlockLineNumbers: false
         };
     }
 
@@ -111,6 +113,8 @@ class StorageService {
     /** Updates cache immediately, persists to IDB async. */
     saveSettings(settings) {
         this._settingsCache = settings;
+        // Expose to non-module scripts (markdown.js) that can't import this module
+        window._synapseSettingsCache = settings;
         putRecord('settings', { key: 'app', value: settings }).catch(
             e => console.error('Failed to save settings:', e)
         );

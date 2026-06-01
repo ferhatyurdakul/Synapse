@@ -148,6 +148,19 @@ class SettingsPanel {
                                 </label>
                             </div>
                         </div>
+
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Code Block Line Numbers</h3>
+                                    <p class="settings-description">Show line numbers alongside code in fenced code blocks.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="line-numbers-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Models Tab -->
@@ -679,6 +692,9 @@ class SettingsPanel {
         // Load branch on edit toggle
         document.getElementById('branch-on-edit-toggle').checked = settings.branchOnEdit === true;
 
+        // Load line numbers toggle
+        document.getElementById('line-numbers-toggle').checked = settings.codeBlockLineNumbers === true;
+
         // Load RAG settings — load both providers in parallel
         await this.loadAllEmbeddingModels();
         document.getElementById('rag-chunk-size').value = settings.ragChunkSize || 512;
@@ -1004,6 +1020,7 @@ class SettingsPanel {
             if (sysPromptInput) settings.systemPrompt = sysPromptInput.value.trim();
             settings.toolsEnabled = document.getElementById('tools-enabled-toggle').checked;
             settings.branchOnEdit = document.getElementById('branch-on-edit-toggle').checked;
+            settings.codeBlockLineNumbers = document.getElementById('line-numbers-toggle').checked;
             settings.titleEnabled = document.getElementById('title-enabled-toggle').checked;
             settings.summarizationEnabled = document.getElementById('summ-enabled-toggle').checked;
             settings.searchProvider = document.getElementById('search-provider-select').value;

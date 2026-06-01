@@ -1465,9 +1465,15 @@ body::before {
 }
 
 .code-block-lang {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--bg-hover);
     color: var(--accent-purple);
     text-transform: uppercase;
     font-weight: 600;
+    font-size: var(--font-xs);
+    letter-spacing: 0.5px;
 }
 
 .code-copy-btn {
@@ -1544,6 +1550,88 @@ body::before {
     background: none;
     border: none;
     color: var(--text-primary);
+}
+
+/* ── Syntax Highlighting (highlight.js theme overrides for Retro) ──── */
+.code-block-container pre code.hljs {
+    background: transparent;
+    padding: 0;
+}
+
+.code-block-container pre {
+    background: #1a1e2e;
+    border: 1px solid var(--border-color);
+}
+
+/* Retro theme: warm neon-tinted syntax colors */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal { color: #ff79c6; }
+.hljs-string,
+.hljs-addition { color: #50fa7b; }
+.hljs-number,
+.hljs-built_in { color: #bd93f9; }
+.hljs-comment,
+.hljs-quote { color: #6272a4; font-style: italic; }
+.hljs-function .hljs-title,
+.hljs-title.function_ { color: #8be9fd; }
+.hljs-title.class_,
+.hljs-class .hljs-title { color: #ffb86c; }
+.hljs-attr,
+.hljs-variable,
+.hljs-params { color: #f8f8f2; }
+.hljs-type,
+.hljs-built_in { color: #8be9fd; }
+.hljs-meta,
+.hljs-tag { color: #ff79c6; }
+.hljs-name { color: #8be9fd; }
+.hljs-attribute { color: #50fa7b; }
+.hljs-regexp { color: #f1fa8c; }
+.hljs-symbol,
+.hljs-bullet { color: #bd93f9; }
+.hljs-deletion { color: #ff5555; }
+.hljs-selector-class { color: #50fa7b; }
+.hljs-selector-id { color: #bd93f9; }
+.hljs-template-variable { color: #ff79c6; }
+.hljs-subst { color: #f8f8f2; }
+.hljs-section { color: #8be9fd; font-weight: bold; }
+
+/* ── Line Numbers ────────────────────────────────────────────────────── */
+.code-block-container pre.line-numbers {
+    counter-reset: codeline;
+}
+
+.code-line {
+    display: block;
+    min-height: 1em;
+}
+
+.code-line-number {
+    display: inline-block;
+    width: 3.5em;
+    margin-right: 1em;
+    text-align: right;
+    color: var(--text-muted);
+    opacity: 0.4;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.code-line-content {
+    /* content span — default inline is fine */
+}
+
+/* When line numbers are present, shift code right with padding instead of inline width
+   to keep text selection clean */
+.code-block-container pre.line-numbers code {
+    padding-left: 0;
+}
+
+/* Hide line numbers from text selection (copy) */
+.code-line-number::before {
+    content: '';
 }
 
 .message-content h1,
