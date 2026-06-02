@@ -29,6 +29,18 @@ function generateTitle(content) {
         : cleaned;
 }
 
+function normalizeSeedMessages(messages = []) {
+    return messages
+        .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant') && msg.content)
+        .map(msg => ({
+            id: generateId(),
+            role: msg.role,
+            content: String(msg.content),
+            thinking: msg.role === 'assistant' ? String(msg.thinking || '') : '',
+            timestamp: msg.timestamp || new Date().toISOString()
+        }));
+}
+
 class ChatService {
     constructor() {
         this.chats = {};
@@ -104,26 +116,38 @@ class ChatService {
      * @param {string} model - Model name to use
      * @returns {string} New chat ID
      */
-    createChat(model) {
+    createChat(modelOrOptions) {
+        const options = typeof modelOrOptions === 'object' && modelOrOptions !== null
+            ? modelOrOptions
+            : { model: modelOrOptions };
         const id = generateId();
+        const now = new Date().toISOString();
+        const seedMessages = normalizeSeedMessages(options.messages);
 
         this.chats[id] = {
             id,
-            title: 'New Chat',
-            model,
-            provider: providerManager.getProviderName(),
-            messages: [],
+            title: options.title || 'New Chat',
+            model: options.model || null,
+            provider: options.provider || providerManager.getProviderName(),
+            messages: seedMessages,
             summary: null,
             summarizedUpTo: 0,
             lastTokenCount: 0,
             parentChatId: null,
             forkedFromMessageId: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            systemPrompt: options.systemPrompt ?? null,
+            templateId: options.templateId || null,
+            createdAt: now,
+            updatedAt: now
         };
 
         this.currentChatId = id;
         this._persistChat(this.chats[id]);
+        if (seedMessages.length > 0) {
+            storageService.saveMessages(id, seedMessages).catch(
+                e => console.error('Failed to save seed messages:', e)
+            );
+        }
 
         eventBus.emit(Events.CHAT_CREATED, { id, chat: this.chats[id] });
 
@@ -285,6 +309,9 @@ class ChatService {
      */
     getSystemPrompt() {
         const chat = this.getCurrentChat();
+        if (chat && Object.prototype.hasOwnProperty.call(chat, 'systemPrompt') && chat.systemPrompt !== null) {
+            return chat.systemPrompt || '';
+        }
         if (chat?.folderId) {
             const folder = this.getFolder(chat.folderId);
             if (folder?.systemPrompt) return folder.systemPrompt;
@@ -699,6 +726,13 @@ class ChatService {
         }
         this._persistChat(this.chats[chatId]);
         eventBus.emit(Events.CHAT_UPDATED);
+    }
+
+    updateSystemPrompt(chatId, prompt) {
+        if (!chatId || !this.chats[chatId]) return;
+        this.chats[chatId].systemPrompt = prompt ?? '';
+        this._persistChat(this.chats[chatId]);
+        eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat: this.chats[chatId] });
     }
 }
 

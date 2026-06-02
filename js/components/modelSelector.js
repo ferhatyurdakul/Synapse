@@ -26,6 +26,7 @@ class ModelSelector {
         refreshIcons();
         await this.loadModels();
         this.attachEvents();
+        this.listenToEvents();
     }
 
     render() {
@@ -148,6 +149,53 @@ class ModelSelector {
             refreshBtn.classList.add('spinning');
             setTimeout(() => refreshBtn.classList.remove('spinning'), 500);
         });
+    }
+
+    listenToEvents() {
+        eventBus.on(Events.CHAT_SELECTED, async ({ chat }) => {
+            await this.syncToChat(chat);
+        });
+
+        eventBus.on(Events.CHAT_CREATED, async ({ chat }) => {
+            await this.syncToChat(chat);
+        });
+    }
+
+    async syncToChat(chat) {
+        if (!chat) return;
+
+        const providerSelect = document.getElementById('provider-select');
+        const modelSelect = document.getElementById('model-select');
+        let shouldReloadModels = false;
+
+        if (chat.provider && chat.provider !== providerManager.getProviderName()) {
+            if (providerSelect) providerSelect.value = chat.provider;
+            providerManager.setProvider(chat.provider);
+            this.capabilityCache = {};
+            shouldReloadModels = true;
+        }
+
+        if (chat.model) {
+            const settings = storageService.loadSettings();
+            if (settings.selectedModel !== chat.model) {
+                settings.selectedModel = chat.model;
+                storageService.saveSettings(settings);
+            }
+        }
+
+        if (shouldReloadModels || this.models.length === 0) {
+            await this.loadModels();
+        }
+
+        if (!chat.model || !modelSelect) return;
+
+        const hasOption = Array.from(modelSelect.options).some(option => option.value === chat.model);
+        if (!hasOption) return;
+
+        this.selectedModel = chat.model;
+        modelSelect.value = chat.model;
+        eventBus.emit(Events.MODEL_CHANGED, { model: chat.model });
+        this.checkModelCapabilities(chat.model);
     }
 
     /**

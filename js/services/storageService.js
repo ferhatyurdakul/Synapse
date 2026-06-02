@@ -33,6 +33,7 @@ class StorageService {
         /** @type {Object|null} */ this._settingsCache = null;
         /** @type {Object|null} */ this._foldersCache = null;
         /** @type {Object|null} */ this._modelSettingsCache = null;
+        /** @type {Object|null} */ this._templatesCache = null;
         /** @type {Object}      */ this._uiStateCache = {};
         /** @type {boolean}     */ this._ready = false;
         /** @type {Promise|null}*/ this._initPromise = null;
@@ -74,6 +75,10 @@ class StorageService {
 
         const msRec = await getRecord('modelSettings', 'all');
         this._modelSettingsCache = msRec?.value || {};
+
+        const templatesArr = await getAllRecords('templates');
+        this._templatesCache = {};
+        for (const template of templatesArr) this._templatesCache[template.id] = template;
 
         const sidebarRec = await getRecord('uiState', 'sidebar-collapsed');
         this._uiStateCache['sidebar-collapsed'] = sidebarRec?.value || false;
@@ -148,6 +153,30 @@ class StorageService {
         this._modelSettingsCache = allSettings;
         putRecord('modelSettings', { key: 'all', value: allSettings }).catch(
             e => console.error('Failed to save model settings:', e)
+        );
+    }
+
+    // ─── Conversation templates (sync read, async write-behind) ─────────────
+
+    /** @returns {Object} Templates map keyed by ID (sync) */
+    loadTemplates() {
+        return this._templatesCache || {};
+    }
+
+    saveTemplate(template) {
+        this._templatesCache = this._templatesCache || {};
+        this._templatesCache[template.id] = template;
+        putRecord('templates', template).catch(
+            e => console.error('Failed to save template:', e)
+        );
+    }
+
+    deleteTemplate(templateId) {
+        if (this._templatesCache) {
+            delete this._templatesCache[templateId];
+        }
+        deleteRecord('templates', templateId).catch(
+            e => console.error('Failed to delete template:', e)
         );
     }
 
@@ -407,11 +436,13 @@ class StorageService {
         await clearStore('settings');
         await clearStore('folders');
         await clearStore('modelSettings');
+        await clearStore('templates');
         await clearStore('uiState');
 
         this._settingsCache = this.getDefaultSettings();
         this._foldersCache = {};
         this._modelSettingsCache = {};
+        this._templatesCache = {};
         this._uiStateCache = {};
     }
 

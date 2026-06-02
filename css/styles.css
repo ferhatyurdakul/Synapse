@@ -3127,6 +3127,275 @@ body::before {
     height: 14px;
 }
 
+/* ===== Template Modal ===== */
+.template-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.template-modal.hidden {
+    display: none;
+}
+
+.template-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(4px);
+}
+
+.template-panel {
+    position: relative;
+    width: min(760px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+}
+
+.template-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.template-header h2,
+.template-section-heading h3,
+.template-card-header h4 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.template-header p,
+.template-save-hint,
+.template-card-description,
+.template-card-meta {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.template-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+}
+
+.template-close-btn:hover {
+    color: var(--text-primary);
+}
+
+.template-close-btn .icon,
+.template-use-btn .icon,
+.template-delete-btn .icon,
+.template-primary-btn .icon {
+    width: 14px;
+    height: 14px;
+}
+
+.template-body {
+    padding: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    overflow: auto;
+}
+
+.template-list-section,
+.template-save-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.template-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.template-count,
+.template-chip {
+    font-size: 11px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: 999px;
+    padding: 3px 8px;
+}
+
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.template-empty {
+    padding: 18px;
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    text-align: center;
+    line-height: 1.5;
+}
+
+.template-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+}
+
+.template-card-main,
+.template-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.template-card-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.template-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.template-chips,
+.template-card-meta,
+.template-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.template-card-description {
+    line-height: 1.45;
+}
+
+.template-card-meta {
+    font-size: 11px;
+}
+
+.template-card-actions {
+    align-items: flex-start;
+    flex-shrink: 0;
+}
+
+.template-use-btn,
+.template-delete-btn,
+.template-primary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-mono);
+}
+
+.template-use-btn,
+.template-primary-btn {
+    border: 1px solid var(--accent-cyan);
+    background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-hover));
+    color: var(--accent-cyan);
+    padding: 8px 12px;
+}
+
+.template-use-btn:hover,
+.template-primary-btn:hover {
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+    box-shadow: var(--glow-cyan);
+}
+
+.template-delete-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    width: 34px;
+    height: 34px;
+}
+
+.template-delete-btn:hover {
+    color: var(--error-color);
+    border-color: var(--error-color);
+}
+
+.template-form label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.template-input,
+.template-textarea {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 10px 12px;
+}
+
+.template-input:focus,
+.template-textarea:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+}
+
+.template-textarea {
+    resize: vertical;
+    min-height: 88px;
+}
+
+.template-primary-btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+@media (max-width: 820px) {
+    .template-body {
+        grid-template-columns: 1fr;
+    }
+
+    .template-card {
+        flex-direction: column;
+    }
+
+    .template-card-actions {
+        justify-content: flex-end;
+    }
+}
+
 /* ===== Web Search Toggle ===== */
 .web-search-btn {
     width: 20px;
@@ -3736,6 +4005,5 @@ body::before {
     width: 12px;
     height: 12px;
 }
-
 
 

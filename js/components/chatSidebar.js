@@ -7,7 +7,7 @@ import { chatService } from '../services/chatService.js';
 import { storageService } from '../services/storageService.js';
 import { providerManager } from '../services/providerManager.js';
 import { eventBus, Events } from '../utils/eventBus.js';
-import { openSettings } from './settingsPanel.js';
+import { openSettings, getModelParams } from './settingsPanel.js';
 import { renderMarkdown, escapeHtml } from '../utils/markdown.js';
 import { toast } from './toast.js';
 
@@ -29,6 +29,7 @@ class ChatSidebar {
             containsSearch: false
         };
         this.collapsed = storageService.loadSidebarState();
+        this.templateFormState = { name: '', description: '' };
 
         this.init();
     }
@@ -36,9 +37,11 @@ class ChatSidebar {
     init() {
         this.render();
         this.ensureExportModal();
+        this.ensureTemplateModal();
         this.attachEvents();
         this.listenToEvents();
         this.refreshChatList();
+        this.updateTemplateButtonState();
 
         // Render Lucide icons in sidebar
         refreshIcons();
@@ -60,6 +63,9 @@ class ChatSidebar {
                 <div class="sidebar-actions">
                     <button id="new-chat-btn" class="action-btn primary">
                         <i data-lucide="plus" class="icon"></i> New Chat
+                    </button>
+                    <button id="templates-btn" class="action-btn">
+                        <i data-lucide="bookmark" class="icon"></i> Templates
                     </button>
                 </div>
                 
@@ -137,6 +143,11 @@ class ChatSidebar {
                         <i data-lucide="trash-2" class="icon"></i> Delete All
                     </button>
                     <div class="footer-row">
+                        <button id="save-template-btn" class="footer-btn" title="Save current chat as template">
+                            <i data-lucide="bookmark-plus" class="icon"></i> Save Template
+                        </button>
+                    </div>
+                    <div class="footer-row">
                         <button id="import-btn" class="footer-btn" title="Import chats">
                             <i data-lucide="download" class="icon"></i> Import
                         </button>
@@ -154,7 +165,10 @@ class ChatSidebar {
     attachEvents() {
         // Close export modal on Escape
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') this.closeExportModal();
+            if (e.key === 'Escape') {
+                this.closeExportModal();
+                this.closeTemplateModal();
+            }
         });
 
         // Sidebar toggle
@@ -165,6 +179,10 @@ class ChatSidebar {
         // New chat button
         document.getElementById('new-chat-btn').addEventListener('click', () => {
             this.createNewChat();
+        });
+
+        document.getElementById('templates-btn').addEventListener('click', () => {
+            this.openTemplateModal();
         });
 
         // New folder button
@@ -286,6 +304,11 @@ class ChatSidebar {
         document.getElementById('settings-btn').addEventListener('click', () => {
             openSettings();
         });
+
+        document.getElementById('save-template-btn').addEventListener('click', () => {
+            this.openTemplateModal();
+            this.focusTemplateForm();
+        });
     }
 
     listenToEvents() {
@@ -296,30 +319,41 @@ class ChatSidebar {
         eventBus.on(Events.CHAT_CREATED, () => {
             this.refreshChatList();
             this.updateExportButtonState();
+            this.updateTemplateButtonState();
         });
 
         eventBus.on(Events.CHAT_DELETED, () => {
             this.refreshChatList();
             this.updateExportButtonState();
+            this.updateTemplateButtonState();
         });
 
         eventBus.on(Events.CHAT_UPDATED, () => {
             this.refreshChatList();
             this.updateExportButtonState();
+            this.updateTemplateButtonState();
         });
 
         eventBus.on(Events.CHATS_IMPORTED, () => {
             this.refreshChatList();
             this.updateExportButtonState();
+            this.updateTemplateButtonState();
         });
 
         eventBus.on(Events.CHAT_SELECTED, () => {
             this.updateExportButtonState();
+            this.updateTemplateButtonState();
         });
 
         eventBus.on(Events.CHAT_FORKED, () => {
             this.refreshChatList();
             this.updateExportButtonState();
+            this.updateTemplateButtonState();
+        });
+
+        eventBus.on(Events.TEMPLATES_UPDATED, () => {
+            this.renderTemplateModal();
+            this.updateTemplateButtonState();
         });
     }
 
@@ -676,6 +710,270 @@ class ChatSidebar {
         });
     }
 
+    getAllTemplates() {
+        return Object.values(storageService.loadTemplates()).sort(
+            (a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
+        );
+    }
+
+    getCurrentTemplateSnapshot() {
+        const currentChat = chatService.getCurrentChat();
+        const settings = storageService.loadSettings();
+        const provider = currentChat?.provider || providerManager.getProviderName();
+        const model = currentChat?.model || settings.selectedModel || null;
+
+        if (!model) return null;
+
+        const seedMessages = (currentChat?.messages || [])
+            .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.content)
+            .map(msg => ({
+                role: msg.role,
+                content: String(msg.content),
+                thinking: msg.role === 'assistant' ? String(msg.thinking || '') : ''
+            }));
+
+        return {
+            provider,
+            model,
+            modelParams: { ...getModelParams(model) },
+            systemPrompt: chatService.getSystemPrompt(),
+            seedMessages
+        };
+    }
+
+    ensureTemplateModal() {
+        if (document.getElementById('template-modal')) return;
+
+        const modal = document.createElement('div');
+        modal.id = 'template-modal';
+        modal.className = 'template-modal hidden';
+        modal.innerHTML = `
+            <div class="template-overlay" id="template-overlay"></div>
+            <div class="template-panel">
+                <div class="template-header">
+                    <div>
+                        <h2>Conversation Templates</h2>
+                        <p>Save provider, model, prompt, and seed messages for reuse.</p>
+                    </div>
+                    <button class="template-close-btn" id="template-close-btn" title="Close" aria-label="Close"><i data-lucide="x" class="icon"></i></button>
+                </div>
+                <div class="template-body">
+                    <section class="template-list-section">
+                        <div class="template-section-heading">
+                            <h3>Start from Template</h3>
+                            <span class="template-count" id="template-count">0</span>
+                        </div>
+                        <div id="template-list" class="template-list"></div>
+                    </section>
+                    <section class="template-save-section">
+                        <div class="template-section-heading">
+                            <h3>Save Current Chat</h3>
+                        </div>
+                        <p class="template-save-hint" id="template-save-hint"></p>
+                        <div class="template-form">
+                            <label for="template-name-input">Template name</label>
+                            <input id="template-name-input" class="template-input" type="text" maxlength="80" placeholder="e.g. Research kickoff">
+                            <label for="template-description-input">Description</label>
+                            <textarea id="template-description-input" class="template-textarea" rows="3" maxlength="240" placeholder="Optional note about when to use this template"></textarea>
+                            <button id="template-save-btn" class="template-primary-btn">
+                                <i data-lucide="bookmark-plus" class="icon"></i> Save Template
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        refreshIcons();
+
+        document.getElementById('template-overlay').addEventListener('click', () => this.closeTemplateModal());
+        document.getElementById('template-close-btn').addEventListener('click', () => this.closeTemplateModal());
+        document.getElementById('template-save-btn').addEventListener('click', () => this.handleTemplateSave());
+        document.getElementById('template-name-input').addEventListener('input', (e) => {
+            this.templateFormState.name = e.target.value;
+        });
+        document.getElementById('template-description-input').addEventListener('input', (e) => {
+            this.templateFormState.description = e.target.value;
+        });
+    }
+
+    renderTemplateModal() {
+        const listEl = document.getElementById('template-list');
+        const countEl = document.getElementById('template-count');
+        const hintEl = document.getElementById('template-save-hint');
+        const nameInput = document.getElementById('template-name-input');
+        const descriptionInput = document.getElementById('template-description-input');
+        const saveBtn = document.getElementById('template-save-btn');
+
+        if (!listEl || !countEl || !hintEl || !nameInput || !descriptionInput || !saveBtn) return;
+
+        const templates = this.getAllTemplates();
+        const snapshot = this.getCurrentTemplateSnapshot();
+        const currentChat = chatService.getCurrentChat();
+
+        countEl.textContent = String(templates.length);
+        nameInput.value = this.templateFormState.name;
+        descriptionInput.value = this.templateFormState.description;
+
+        if (templates.length === 0) {
+            listEl.innerHTML = `<div class="template-empty">No templates yet. Save a chat configuration to create your first one.</div>`;
+        } else {
+            listEl.innerHTML = templates.map(template => `
+                <article class="template-card" data-template-id="${template.id}">
+                    <div class="template-card-main">
+                        <div class="template-card-header">
+                            <h4>${escapeHtml(template.title)}</h4>
+                            <div class="template-chips">
+                                <span class="template-chip">${escapeHtml(template.provider || 'unknown')}</span>
+                                <span class="template-chip">${escapeHtml(template.model || 'no model')}</span>
+                            </div>
+                        </div>
+                        ${template.description ? `<p class="template-card-description">${escapeHtml(template.description)}</p>` : ''}
+                        <div class="template-card-meta">
+                            <span>${(template.seedMessages || []).length} seed message${(template.seedMessages || []).length === 1 ? '' : 's'}</span>
+                            <span>${template.systemPrompt ? 'Custom prompt' : 'Uses default prompt'}</span>
+                        </div>
+                    </div>
+                    <div class="template-card-actions">
+                        <button class="template-use-btn" data-template-id="${template.id}">
+                            <i data-lucide="play" class="icon"></i> Use
+                        </button>
+                        <button class="template-delete-btn" data-template-id="${template.id}" title="Delete template" aria-label="Delete template">
+                            <i data-lucide="trash-2" class="icon"></i>
+                        </button>
+                    </div>
+                </article>
+            `).join('');
+        }
+
+        if (snapshot) {
+            const sourceName = currentChat?.title && currentChat.title !== 'New Chat'
+                ? `"${currentChat.title}"`
+                : `${snapshot.provider}/${snapshot.model}`;
+            hintEl.textContent = `Save the current configuration from ${sourceName}. ${snapshot.seedMessages.length} seed message${snapshot.seedMessages.length === 1 ? '' : 's'} will be included.`;
+            saveBtn.disabled = false;
+        } else {
+            hintEl.textContent = 'Select a model or open a chat before saving a template.';
+            saveBtn.disabled = true;
+        }
+
+        listEl.querySelectorAll('.template-use-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.createChatFromTemplate(btn.dataset.templateId));
+        });
+
+        listEl.querySelectorAll('.template-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.deleteTemplate(btn.dataset.templateId));
+        });
+
+        refreshIcons();
+    }
+
+    openTemplateModal() {
+        if (!this.templateFormState.name) {
+            const currentChat = chatService.getCurrentChat();
+            if (currentChat?.title && currentChat.title !== 'New Chat') {
+                this.templateFormState.name = currentChat.title;
+            }
+        }
+        this.renderTemplateModal();
+        document.getElementById('template-modal')?.classList.remove('hidden');
+    }
+
+    closeTemplateModal() {
+        document.getElementById('template-modal')?.classList.add('hidden');
+    }
+
+    focusTemplateForm() {
+        requestAnimationFrame(() => {
+            document.getElementById('template-name-input')?.focus();
+        });
+    }
+
+    handleTemplateSave() {
+        const snapshot = this.getCurrentTemplateSnapshot();
+        if (!snapshot) {
+            toast.warning('Select a model or open a chat before saving a template.');
+            return;
+        }
+
+        const nameInput = document.getElementById('template-name-input');
+        const descriptionInput = document.getElementById('template-description-input');
+        const title = nameInput?.value.trim() || '';
+        const description = descriptionInput?.value.trim() || '';
+
+        if (!title) {
+            toast.warning('Give the template a name first.');
+            nameInput?.focus();
+            return;
+        }
+
+        const now = new Date().toISOString();
+        const template = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+            title,
+            description,
+            ...snapshot,
+            createdAt: now,
+            updatedAt: now
+        };
+
+        storageService.saveTemplate(template);
+        this.templateFormState = { name: '', description: '' };
+        eventBus.emit(Events.TEMPLATES_UPDATED, { templateId: template.id });
+        toast.success('Template saved');
+    }
+
+    createChatFromTemplate(templateId) {
+        const template = storageService.loadTemplates()[templateId];
+        if (!template) {
+            toast.error('Template not found');
+            return;
+        }
+
+        const settings = storageService.loadSettings();
+        settings.selectedModel = template.model || settings.selectedModel;
+        storageService.saveSettings(settings);
+
+        if (template.model && template.modelParams) {
+            const allModelSettings = storageService.loadModelSettings();
+            allModelSettings[template.model] = { ...template.modelParams };
+            storageService.saveModelSettings(allModelSettings);
+        }
+
+        if (template.provider && template.provider !== providerManager.getProviderName()) {
+            providerManager.setProvider(template.provider);
+        }
+
+        chatService.createChat({
+            title: template.title,
+            provider: template.provider,
+            model: template.model,
+            systemPrompt: template.systemPrompt || '',
+            messages: template.seedMessages || [],
+            templateId: template.id
+        });
+        this.closeTemplateModal();
+        this.refreshChatList();
+        toast.success(`Started chat from "${template.title}"`);
+    }
+
+    deleteTemplate(templateId) {
+        const template = storageService.loadTemplates()[templateId];
+        if (!template) return;
+
+        this.showConfirmDialog(
+            'Delete Template',
+            `Delete "${escapeHtml(template.title)}"? This cannot be undone.`,
+            () => {
+                storageService.deleteTemplate(templateId);
+                eventBus.emit(Events.TEMPLATES_UPDATED, { templateId, deleted: true });
+                toast.success('Template deleted');
+            },
+            'Delete'
+        );
+    }
+
     highlightMatch(text, query) {
         if (!query) return text;
         const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
@@ -956,6 +1254,15 @@ class ChatSidebar {
         exportBtn.title = hasMessages ? 'Export current chat' : 'No chat to export';
     }
 
+    updateTemplateButtonState() {
+        const saveBtn = document.getElementById('save-template-btn');
+        if (!saveBtn) return;
+
+        const snapshot = this.getCurrentTemplateSnapshot();
+        saveBtn.disabled = !snapshot;
+        saveBtn.title = snapshot ? 'Save current chat as template' : 'Select a model or chat to save a template';
+    }
+
     handleDeleteAll() {
         const chats = chatService.getAllChats();
         if (chats.length === 0) {
@@ -973,7 +1280,7 @@ class ChatSidebar {
         );
     }
 
-    showConfirmDialog(title, message, onConfirm) {
+    showConfirmDialog(title, message, onConfirm, confirmLabel = 'Delete') {
         // Remove existing dialog if any
         const existing = document.getElementById('confirm-dialog');
         if (existing) existing.remove();
@@ -988,7 +1295,7 @@ class ChatSidebar {
                 <p class="confirm-message">${message}</p>
                 <div class="confirm-actions">
                     <button class="confirm-btn cancel">Cancel</button>
-                    <button class="confirm-btn danger">Delete</button>
+                    <button class="confirm-btn danger">${confirmLabel}</button>
                 </div>
             </div>
         `;

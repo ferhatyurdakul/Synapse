@@ -115,6 +115,7 @@ export const Events = {
     // Storage events
     CHATS_IMPORTED: 'chats:imported',
     CHATS_EXPORTED: 'chats:exported',
+    TEMPLATES_UPDATED: 'templates:updated',
 
     // Settings events
     SETTINGS_UPDATED: 'settings:updated',

@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -44,6 +44,13 @@ const STORES = {
     folders: { keyPath: 'id' },
     modelSettings: { keyPath: 'key' },
     uiState: { keyPath: 'key' },
+    templates: {
+        version: 4,
+        keyPath: 'id',
+        indexes: [
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
 
     // ── RAG stores (v2) ─────────────────────────────────────────────────
     ragCollections: {
