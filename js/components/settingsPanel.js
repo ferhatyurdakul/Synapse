@@ -7,6 +7,7 @@ import { titleService } from '../services/titleService.js';
 import { contextService } from '../services/contextService.js';
 import { providerManager } from '../services/providerManager.js';
 import { storageService } from '../services/storageService.js';
+import { systemStatsService } from '../services/systemStatsService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { toast } from './toast.js';
 import { themeService } from '../services/themeService.js';
@@ -368,6 +369,50 @@ class SettingsPanel {
                         </div>
 
                         <div class="settings-section">
+                            <h3>System Stats</h3>
+                            <p class="settings-description">Browser-exposed diagnostics. Limited to what the runtime reports — no OS-level or GPU metrics available.</p>
+                            <div class="system-stats-grid" id="system-stats-grid">
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">JS Heap Used</span>
+                                    <span class="system-stat-value" id="stat-heap-used">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">JS Heap Total</span>
+                                    <span class="system-stat-value" id="stat-heap-total">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">localStorage</span>
+                                    <span class="system-stat-value" id="stat-localstorage">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">IndexedDB</span>
+                                    <span class="system-stat-value" id="stat-indexeddb">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">Device Memory</span>
+                                    <span class="system-stat-value" id="stat-device-memory">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">CPU Cores</span>
+                                    <span class="system-stat-value" id="stat-cpu-cores">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">Chats</span>
+                                    <span class="system-stat-value" id="stat-chat-count">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">Messages</span>
+                                    <span class="system-stat-value" id="stat-message-count">—</span>
+                                </div>
+                                <div class="system-stat-item">
+                                    <span class="system-stat-label">Images</span>
+                                    <span class="system-stat-value" id="stat-attachment-count">—</span>
+                                </div>
+                            </div>
+                            <p class="settings-hint" id="system-stats-hint"></p>
+                        </div>
+
+                        <div class="settings-section">
                             <h3>Cleanup</h3>
                             <p class="settings-description">Free up storage space by removing old chats.</p>
                             <div class="settings-field">
@@ -455,6 +500,51 @@ class SettingsPanel {
                 <span>${info.attachmentCount} image${info.attachmentCount !== 1 ? 's' : ''}</span>
             `;
         }
+
+        // Also populate system stats
+        this.refreshSystemStats(info);
+    }
+
+    /**
+     * Populate browser-accessible system diagnostics.
+     * Called alongside refreshStorageStats when the Storage tab is shown.
+     */
+    async refreshSystemStats(storageInfo = null) {
+        const stats = await systemStatsService.getStats();
+        const info = storageInfo || {
+            chatCount: stats.app.chatCount,
+            messageCount: stats.app.messageCount,
+            attachmentCount: stats.app.attachmentCount
+        };
+
+        document.getElementById('stat-heap-used').textContent =
+            stats.memory.usedJsHeapBytes !== null
+                ? systemStatsService.formatBytes(stats.memory.usedJsHeapBytes)
+                : 'Not available';
+        document.getElementById('stat-heap-total').textContent =
+            stats.memory.totalJsHeapBytes !== null
+                ? systemStatsService.formatBytes(stats.memory.totalJsHeapBytes)
+                : 'Not available';
+        document.getElementById('stat-localstorage').textContent =
+            systemStatsService.formatBytes(stats.storage.localStorageBytes);
+        document.getElementById('stat-indexeddb').textContent =
+            stats.storage.indexedDbBytes !== null
+                ? systemStatsService.formatBytes(stats.storage.indexedDbBytes)
+                : `${systemStatsService.formatBytes(stats.storage.browserUsageBytes)} (shared estimate)`;
+        document.getElementById('stat-device-memory').textContent =
+            stats.device.deviceMemory || 'Not available';
+        document.getElementById('stat-cpu-cores').textContent =
+            stats.device.hardwareConcurrency || 'Not available';
+        document.getElementById('stat-chat-count').textContent = info.chatCount;
+        document.getElementById('stat-message-count').textContent = info.messageCount;
+        document.getElementById('stat-attachment-count').textContent = info.attachmentCount;
+
+        const limitations = [];
+        if (stats.memory.usedJsHeapBytes === null) limitations.push('JS heap metrics are only exposed by some browsers');
+        if (stats.storage.indexedDbBytes === null) limitations.push('IndexedDB size may only be available as part of a shared browser storage estimate');
+        if (!stats.device.deviceMemory) limitations.push('deviceMemory is not available in this browser');
+        limitations.push('Real CPU, GPU, and total RAM telemetry would require a small local companion backend');
+        document.getElementById('system-stats-hint').textContent = limitations.join('. ') + '.';
     }
 
     _escapeHtml(str) {

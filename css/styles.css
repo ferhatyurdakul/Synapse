@@ -2535,6 +2535,33 @@ body::before {
     color: var(--text-muted);
 }
 
+/* System Stats Grid */
+.system-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 24px;
+    margin-top: 4px;
+}
+
+.system-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.system-stat-label {
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+}
+
+.system-stat-value {
+    font-size: var(--font-xs);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
 .cleanup-row {
     display: flex;
     align-items: center;

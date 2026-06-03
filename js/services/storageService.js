@@ -463,6 +463,7 @@ class StorageService {
         return {
             used: estimate.usage || 0,
             quota: estimate.quota || 0,
+            indexedDbUsed: estimate.usageDetails?.indexedDB ?? null,
             chatCount,
             messageCount,
             attachmentCount
