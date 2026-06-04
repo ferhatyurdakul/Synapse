@@ -21,7 +21,7 @@ Running local models often means juggling separate UIs for each provider, losing
 - **RAG document upload** — Attach PDFs and text files, embed them per-chat, and get context-aware answers with per-provider embedding model selection
 - **Image support** — Attach and paste images for vision models, with lightbox zoom
 - **Thinking/reasoning** — Collapsible thinking blocks for reasoning models (QwQ, DeepSeek-R1, etc.)
-- **Tool calling** — Native function calling with web search (SearXNG or Brave Search)
+- **Tool calling** — Native function calling with web search (SearXNG, Brave Search, or Tavily)
 - **System prompts** — Global default + per-folder overrides
 - **Chat organization** — Folders, search, drag-and-drop, flagging, export (Markdown/HTML/PDF)
 - **Model parameters** — Per-model temperature, top_p, top_k, context length, repeat penalty
@@ -47,7 +47,7 @@ python3 server.py
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
 
-> `server.py` serves static files and includes a CORS proxy for Brave Search. If you don't need Brave Search, any static file server works: `python3 -m http.server 8000`
+> `server.py` serves static files and includes CORS proxies for Brave Search and Tavily. If you don't need either provider, any static file server works: `python3 -m http.server 8000`
 
 ## Web Search
 
@@ -69,11 +69,19 @@ Requires an API key from [brave.com/search/api](https://brave.com/search/api) an
 
 Configure in **Settings > Tools > Brave Search**.
 
+### Tavily
+
+Requires an API key from [tavily.com](https://tavily.com) and `server.py` as the dev server (it proxies requests to avoid CORS).
+
+Configure in **Settings > Tools > Tavily**.
+
+This release adds Tavily search only. Tavily content extraction is intentionally not wired into Synapse yet.
+
 ## Architecture
 
 ```
 index.html                Entry point
-server.py                 Dev server + Brave API proxy
+server.py                 Dev server + Brave/Tavily API proxies
 css/
   styles.css              Base styles (Retro theme)
   themes/modern.css       Modern theme overrides
@@ -102,7 +110,7 @@ js/
     idbStore.js           IndexedDB wrapper
   tools/                  Tool implementations
     builtins.js           Built-in tools
-    webSearch.js          Web search (SearXNG + Brave)
+    webSearch.js          Web search (SearXNG + Brave + Tavily)
   utils/
     eventBus.js           Pub/sub event system
     markdown.js           Markdown + LaTeX rendering
@@ -116,7 +124,7 @@ The settings panel has five tabs:
 |-----|----------|
 | **General** | Theme picker, system prompt, provider URLs with connection test |
 | **Models** | Per-model parameters (sliders), title generation model, summarization model |
-| **Tools** | Web search provider configuration (SearXNG / Brave) |
+| **Tools** | Web search provider configuration (SearXNG / Brave / Tavily) |
 | **RAG** | Per-provider embedding model selection (Ollama + LM Studio) |
 | **Storage** | Storage usage stats, export/import, cleanup tools |
 

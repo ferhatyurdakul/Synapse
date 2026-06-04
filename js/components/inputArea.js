@@ -48,6 +48,9 @@ class InputArea {
         if (provider === 'brave') {
             return !!settings.braveApiKey;
         }
+        if (provider === 'tavily') {
+            return !!settings.tavilyApiKey;
+        }
         return true;
     }
 

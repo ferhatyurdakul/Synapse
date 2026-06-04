@@ -1,5 +1,5 @@
 /**
- * Web Search tool — searches the web via SearXNG or Brave Search.
+ * Web Search tool — searches the web via SearXNG, Brave Search, or Tavily.
  * Registers into toolRegistry so models can call it via function calling.
  *
  * Providers:
@@ -7,6 +7,8 @@
  *    Quick start: docker run -p 8888:8080 searxng/searxng
  *  - Brave: requires API key + local CORS proxy (server.py).
  *    Start with: python3 server.py [port]
+ *  - Tavily: requires API key + local CORS proxy (server.py).
+ *    Get a key at: https://tavily.com
  */
 
 import { toolRegistry } from '../services/toolRegistry.js';
@@ -86,6 +88,55 @@ async function searchBrave(query, apiKey) {
 }
 
 /**
+ * Search using Tavily Search API via local CORS proxy.
+ * Note: Tavily also offers an /extract endpoint for content extraction,
+ * but only search is supported in this integration.
+ */
+async function searchTavily(query, apiKey) {
+    const proxyUrl = '/api/tavily/search';
+
+    let response;
+    try {
+        response = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: apiKey,
+                query,
+                max_results: MAX_RESULTS,
+                search_depth: 'basic'
+            })
+        });
+    } catch {
+        throw new Error('Cannot reach Tavily API proxy. Start the app with: python3 server.py');
+    }
+
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error('Tavily proxy not found. Start the app with: python3 server.py');
+        }
+        const contentType = response.headers.get('Content-Type') || '';
+        let detail = '';
+        if (contentType.includes('json')) {
+            try {
+                const err = await response.json();
+                detail = err.detail || err.error || JSON.stringify(err);
+            } catch { detail = `HTTP ${response.status}`; }
+        } else {
+            detail = `HTTP ${response.status}`;
+        }
+        throw new Error(`Tavily Search error: ${detail}`);
+    }
+
+    const data = await response.json();
+    return (data.results || []).slice(0, MAX_RESULTS).map(r => ({
+        title: r.title,
+        snippet: r.content || '',
+        url: r.url
+    }));
+}
+
+/**
  * Main handler — routes to configured search provider.
  */
 async function handleWebSearch({ query }) {
@@ -102,6 +153,10 @@ async function handleWebSearch({ query }) {
         const apiKey = settings.braveApiKey;
         if (!apiKey) throw new Error('Brave API key not configured. Set it in Settings → Web Search.');
         results = await searchBrave(q, apiKey);
+    } else if (provider === 'tavily') {
+        const apiKey = settings.tavilyApiKey;
+        if (!apiKey) throw new Error('Tavily API key not configured. Set it in Settings → Web Search.');
+        results = await searchTavily(q, apiKey);
     } else {
         const baseUrl = settings.searxngUrl || DEFAULT_SEARXNG_URL;
         results = await searchSearXNG(q, baseUrl);

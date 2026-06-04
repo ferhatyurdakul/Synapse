@@ -6,7 +6,8 @@ Usage:  python3 server.py [port]
         Default port: 8000
 
 Proxies requests under /api/brave/* to https://api.search.brave.com/*
-so the browser can call Brave Search without CORS issues.
+and /api/tavily/* to https://api.tavily.com/*
+so the browser can call external search APIs without CORS issues.
 """
 
 import http.server
@@ -18,6 +19,7 @@ import json
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 BRAVE_API_BASE = "https://api.search.brave.com"
+TAVILY_API_BASE = "https://api.tavily.com"
 
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
@@ -33,8 +35,16 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         else:
             super().do_GET()
 
+    def do_POST(self):
+        if self.path.startswith("/api/tavily/"):
+            self._proxy_tavily()
+        else:
+            self.send_response(405)
+            self._cors_headers()
+            self.end_headers()
+
     def do_OPTIONS(self):
-        if self.path.startswith("/api/brave/"):
+        if self.path.startswith("/api/brave/") or self.path.startswith("/api/tavily/"):
             self.send_response(204)
             self._cors_headers()
             self.end_headers()
@@ -78,13 +88,47 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def _cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "X-Subscription-Token, Accept")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Subscription-Token, Accept")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+    def _proxy_tavily(self):
+        # Strip /api/tavily prefix and forward to Tavily API
+        remote_path = self.path[len("/api/tavily"):]
+        url = f"{TAVILY_API_BASE}{remote_path}"
+
+        # Read the request body (contains api_key + query)
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length > 0 else None
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = resp.read()
+                self.send_response(resp.status)
+                self._cors_headers()
+                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                self.end_headers()
+                self.wfile.write(body)
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            self.send_response(e.code)
+            self._cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            self.send_response(502)
+            self._cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
 
     def log_message(self, format, *args):
         # Colorize proxy requests
         msg = format % args
-        if "/api/brave/" in msg:
+        if "/api/brave/" in msg or "/api/tavily/" in msg:
             print(f"\033[36m[proxy] {msg}\033[0m")
         else:
             super().log_message(format, *args)
@@ -95,6 +139,7 @@ if __name__ == "__main__":
     with http.server.HTTPServer(("", PORT), ProxyHandler) as httpd:
         print(f"Synapse server running at http://localhost:{PORT}")
         print(f"Brave API proxy at http://localhost:{PORT}/api/brave/")
+        print(f"Tavily API proxy at http://localhost:{PORT}/api/tavily/")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

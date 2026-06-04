@@ -273,6 +273,7 @@ class SettingsPanel {
                                 <select id="search-provider-select" class="settings-select">
                                     <option value="searxng">SearXNG (local)</option>
                                     <option value="brave">Brave Search (API key)</option>
+                                    <option value="tavily">Tavily (API key)</option>
                                 </select>
                             </div>
                             <div id="searxng-settings">
@@ -299,6 +300,19 @@ class SettingsPanel {
                                         </button>
                                     </div>
                                     <p class="settings-hint">Requires <code>python3 server.py</code> as the dev server (CORS proxy).</p>
+                                </div>
+                            </div>
+                            <div id="tavily-settings" style="display:none">
+                                <div class="settings-field">
+                                    <label for="tavily-api-key-input">Tavily API Key</label>
+                                    <div class="url-input-group">
+                                        <input type="password" id="tavily-api-key-input" class="settings-input provider-url-input"
+                                            placeholder="tvly-...">
+                                        <button class="url-test-btn" id="test-tavily-btn" title="Test Tavily Search" aria-label="Test Tavily Search">
+                                            <i data-lucide="wifi" class="icon"></i>
+                                        </button>
+                                    </div>
+                                    <p class="settings-hint">Get a key at <a href="https://tavily.com" target="_blank" rel="noopener">tavily.com</a>. Requires <code>python3 server.py</code> as the dev server (CORS proxy).</p>
                                 </div>
                             </div>
                         </div>
@@ -722,6 +736,40 @@ class SettingsPanel {
             btn.disabled = false;
         });
 
+        // Test Tavily Search connection (via proxy)
+        document.getElementById('test-tavily-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('test-tavily-btn');
+            const apiKey = document.getElementById('tavily-api-key-input').value.trim();
+            if (!apiKey) {
+                toast.error('Enter a Tavily API key first');
+                return;
+            }
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/tavily/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api_key: apiKey,
+                        query: 'test',
+                        max_results: 1,
+                        search_depth: 'basic'
+                    })
+                });
+                if (res.ok) {
+                    toast.success('Tavily Search: Connected');
+                    this.flashTestIcon(btn, true);
+                } else {
+                    toast.error(`Tavily Search: HTTP ${res.status}`);
+                    this.flashTestIcon(btn, false);
+                }
+            } catch {
+                toast.error('Tavily Search: Connection failed. Is server.py running?');
+                this.flashTestIcon(btn, false);
+            }
+            btn.disabled = false;
+        });
+
         // Slider value updates
         Object.keys(PARAM_DEFS).forEach(param => {
             const slider = document.getElementById(`${param}-slider`);
@@ -798,6 +846,7 @@ class SettingsPanel {
         this.toggleSearchProviderUI(searchProvider);
         document.getElementById('searxng-url-input').value = settings.searxngUrl || '';
         document.getElementById('brave-api-key-input').value = settings.braveApiKey || '';
+        document.getElementById('tavily-api-key-input').value = settings.tavilyApiKey || '';
 
         // Load global system prompt
         const sysPromptInput = document.getElementById('system-prompt-input');
@@ -915,6 +964,7 @@ class SettingsPanel {
     toggleSearchProviderUI(provider) {
         document.getElementById('searxng-settings').style.display = provider === 'searxng' ? '' : 'none';
         document.getElementById('brave-settings').style.display = provider === 'brave' ? '' : 'none';
+        document.getElementById('tavily-settings').style.display = provider === 'tavily' ? '' : 'none';
     }
 
     flashTestIcon(btn, success) {
@@ -1116,6 +1166,7 @@ class SettingsPanel {
             settings.searchProvider = document.getElementById('search-provider-select').value;
             settings.searxngUrl = document.getElementById('searxng-url-input').value.trim();
             settings.braveApiKey = document.getElementById('brave-api-key-input').value.trim();
+            settings.tavilyApiKey = document.getElementById('tavily-api-key-input').value.trim();
 
             // RAG settings — per-provider embedding models
             settings.ragEmbeddingsModelOllama = document.getElementById('rag-model-ollama').value || '';
