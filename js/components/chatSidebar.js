@@ -7,6 +7,7 @@ import { chatService } from '../services/chatService.js';
 import { storageService } from '../services/storageService.js';
 import { providerManager } from '../services/providerManager.js';
 import { eventBus, Events } from '../utils/eventBus.js';
+import { getSessionModeConfig } from '../config/sessionModes.js';
 import { openSettings, getModelParams } from './settingsPanel.js';
 import { renderMarkdown, escapeHtml } from '../utils/markdown.js';
 import { toast } from './toast.js';
@@ -48,6 +49,7 @@ class ChatSidebar {
     }
 
     render() {
+        const modeConfig = getSessionModeConfig(chatService.getCurrentMode());
         this.container.innerHTML = `
             <div class="sidebar ${this.collapsed ? 'collapsed' : ''}">
                 <div class="sidebar-header">
@@ -62,7 +64,7 @@ class ChatSidebar {
                 
                 <div class="sidebar-actions">
                     <button id="new-chat-btn" class="action-btn primary">
-                        <i data-lucide="plus" class="icon"></i> New Chat
+                        <i data-lucide="plus" class="icon"></i> <span id="new-chat-label">New ${escapeHtml(modeConfig.label)}</span>
                     </button>
                     <button id="templates-btn" class="action-btn">
                         <i data-lucide="bookmark" class="icon"></i> Templates
@@ -125,7 +127,7 @@ class ChatSidebar {
 
                 <div class="sidebar-section">
                     <div class="section-header">
-                        <span>HISTORY</span>
+                        <span id="history-label">${escapeHtml(modeConfig.label.toUpperCase())} HISTORY</span>
                         <button id="add-folder-btn" class="section-header-btn" title="New folder" aria-label="New folder">
                             <i data-lucide="folder-plus" class="icon"></i>
                         </button>
@@ -160,6 +162,14 @@ class ChatSidebar {
                 <input type="file" id="import-input" accept=".json" style="display: none;">
             </div>
         `;
+    }
+
+    updateModeLabels() {
+        const modeConfig = getSessionModeConfig(chatService.getCurrentMode());
+        const newChatLabel = document.getElementById('new-chat-label');
+        const historyLabel = document.getElementById('history-label');
+        if (newChatLabel) newChatLabel.textContent = `New ${modeConfig.label}`;
+        if (historyLabel) historyLabel.textContent = `${modeConfig.label.toUpperCase()} HISTORY`;
     }
 
     attachEvents() {
@@ -351,6 +361,13 @@ class ChatSidebar {
             this.updateTemplateButtonState();
         });
 
+        eventBus.on(Events.SESSION_MODE_CHANGED, () => {
+            this.updateModeLabels();
+            this.refreshChatList();
+            this.updateExportButtonState();
+            this.updateTemplateButtonState();
+        });
+
         eventBus.on(Events.TEMPLATES_UPDATED, () => {
             this.renderTemplateModal();
             this.updateTemplateButtonState();
@@ -378,7 +395,8 @@ class ChatSidebar {
 
     refreshChatList() {
         const listEl = document.getElementById('chat-list');
-        let chats = chatService.getAllChats();
+        const modeConfig = getSessionModeConfig(chatService.getCurrentMode());
+        let chats = chatService.getChatsForMode();
         const currentId = chatService.getCurrentChatId();
         const query = this.searchQuery.toLowerCase();
 
@@ -445,7 +463,7 @@ class ChatSidebar {
         if (chats.length === 0) {
             listEl.innerHTML = query
                 ? `<div class="empty-state">No results for "${escapeHtml(query)}"</div>`
-                : `<div class="empty-state">No chats yet.<br>Click "New Chat" to start.</div>`;
+                : `<div class="empty-state">No ${escapeHtml(modeConfig.label.toLowerCase())} sessions yet.<br>Click "New ${escapeHtml(modeConfig.label)}" to start.</div>`;
             return;
         }
 

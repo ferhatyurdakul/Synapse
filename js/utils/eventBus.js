@@ -99,6 +99,7 @@ export const Events = {
     CHAT_UPDATED: 'chat:updated',
     CHAT_FORKED: 'chat:forked',
     TITLE_GENERATED: 'chat:titleGenerated',
+    SESSION_MODE_CHANGED: 'chat:sessionModeChanged',
 
     // Message events
     MESSAGE_SENT: 'message:sent',

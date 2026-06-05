@@ -12,6 +12,7 @@ Running local models often means juggling separate UIs for each provider, losing
 
 - **All providers, one place** — Switch between Ollama and LM Studio models instantly. Configure custom endpoint URLs for remote or non-standard setups.
 - **Persistent conversations** — All chats are stored locally in IndexedDB. Pick up where you left off, search across conversations, organize with folders.
+- **Workspace modes** — Split work into Chat, Research, Compare, Document, and Agent sessions with mode-aware history and empty states.
 - **Full-featured chat** — Streaming responses, image attachments for vision models, document upload with RAG, web search, tool calling, Markdown/LaTeX rendering, and more.
 
 ## Features
@@ -22,6 +23,7 @@ Running local models often means juggling separate UIs for each provider, losing
 - **Image support** — Attach and paste images for vision models, with lightbox zoom
 - **Thinking/reasoning** — Collapsible thinking blocks for reasoning models (QwQ, DeepSeek-R1, etc.)
 - **Tool calling** — Native function calling with web search (SearXNG, Brave Search, or Tavily)
+- **Workspace modes** — Dedicated Chat, Research, Compare, Document, and Agent session surfaces
 - **System prompts** — Global default + per-folder overrides
 - **Chat organization** — Folders, search, drag-and-drop, flagging, export (Markdown/HTML/PDF)
 - **Model parameters** — Per-model temperature, top_p, top_k, context length, repeat penalty

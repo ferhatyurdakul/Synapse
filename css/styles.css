@@ -1006,6 +1006,84 @@ body::before {
     gap: 8px;
 }
 
+.header-main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.workspace-mode-switcher {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.workspace-mode-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.workspace-mode-pill {
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-pill);
+    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-family);
+    font-size: var(--font-sm);
+}
+
+.workspace-mode-pill:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-cyan);
+}
+
+.workspace-mode-pill.active {
+    color: var(--bg-primary);
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+    border-color: transparent;
+    box-shadow: var(--glow-cyan);
+}
+
+.workspace-mode-pill .icon,
+.workspace-mode-current .icon,
+.welcome-mode-badge .icon {
+    width: 14px;
+    height: 14px;
+}
+
+.workspace-mode-summary {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: var(--font-sm);
+}
+
+.workspace-mode-current {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent-cyan);
+}
+
+.workspace-mode-description {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .model-selector {
     display: flex;
     align-items: center;
@@ -1202,6 +1280,18 @@ body::before {
     padding: 40px 16px;
     max-width: 400px;
     margin: auto;
+}
+
+.welcome-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-color);
+    color: var(--accent-cyan);
+    background: rgba(0, 212, 255, 0.08);
+    margin-bottom: 12px;
 }
 
 .welcome-icon {
@@ -2113,6 +2203,23 @@ body::before {
 
     .header {
         padding: 0 12px;
+    }
+
+    .header-main {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 8px 0;
+    }
+
+    .workspace-mode-summary {
+        display: none;
+    }
+
+    .workspace-mode-pills {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 2px;
     }
 
     .terminal-select {
@@ -4032,5 +4139,4 @@ body::before {
     width: 12px;
     height: 12px;
 }
-
 

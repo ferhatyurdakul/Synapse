@@ -6,6 +6,7 @@ import { eventBus, Events } from '../utils/eventBus.js';
 import { chatService } from '../services/chatService.js';
 import { storageService } from '../services/storageService.js';
 import { ragService } from '../services/ragService.js';
+import { getSessionModeConfig } from '../config/sessionModes.js';
 import { toast } from './toast.js';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB hard reject
@@ -86,6 +87,7 @@ class InputArea {
     }
 
     render() {
+        const modeConfig = getSessionModeConfig(chatService.getCurrentMode());
         this.container.innerHTML = `
             <div class="input-area">
                 <div id="attachments-strip" class="attachments-strip hidden"></div>
@@ -100,7 +102,7 @@ class InputArea {
                     <textarea
                         id="message-input"
                         class="terminal-input"
-                        placeholder="Enter your message..."
+                        placeholder="${modeConfig.inputPlaceholder.replace(/"/g, '&quot;')}"
                         rows="1"
                     ></textarea>
                     <button id="send-btn" class="send-btn" title="Send message" aria-label="Send message">
@@ -119,6 +121,12 @@ class InputArea {
         if (typeof lucide !== 'undefined') {
             refreshIcons();
         }
+    }
+
+    updateModePlaceholder() {
+        const input = document.getElementById('message-input');
+        if (!input) return;
+        input.placeholder = getSessionModeConfig(chatService.getCurrentMode()).inputPlaceholder;
     }
 
     attachEvents() {
@@ -252,12 +260,16 @@ class InputArea {
         // Save draft before switching, restore draft for new chat
         eventBus.on(Events.CHAT_SELECTED, ({ chat }) => {
             this.saveDraft();
-            this.restoreDraft(chat.id);
+            this.restoreDraft(chat?.id || null);
         });
 
         eventBus.on(Events.CHAT_CREATED, ({ id }) => {
             this.saveDraft();
             this.restoreDraft(id);
+        });
+
+        eventBus.on(Events.SESSION_MODE_CHANGED, () => {
+            this.updateModePlaceholder();
         });
 
         eventBus.on(Events.TOOLS_CAPABILITY_CHANGED, ({ supportsTools }) => {

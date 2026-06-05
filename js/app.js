@@ -9,6 +9,7 @@ import { createChatView } from './components/chatView.js';
 import { createInputArea } from './components/inputArea.js';
 import { createSettingsPanel } from './components/settingsPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
+import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
 import { chatService } from './services/chatService.js';
 import { providerManager } from './services/providerManager.js';
@@ -24,6 +25,7 @@ class App {
         this.chatSidebar = null;
         this.chatView = null;
         this.inputArea = null;
+        this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
 
@@ -45,6 +47,7 @@ class App {
         this.chatView = createChatView('chat-view-container');
         this.inputArea = createInputArea('input-area-container');
         this.contextMeter = createContextMeter();
+        this.workspaceModeSwitcher = createWorkspaceModeSwitcher('workspace-mode-container');
         this.settingsPanel = createSettingsPanel();
 
         // Set up global event listeners

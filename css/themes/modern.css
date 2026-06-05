@@ -725,3 +725,28 @@ html[data-theme="modern"] .tool-message-input {
 .modern-preview .theme-preview-main { background: #18181b; }
 .modern-preview .theme-preview-msg { background: #333338; border-radius: 4px; }
 .modern-preview .theme-preview-input { background: #27272a; border-radius: 4px; }
+
+html[data-theme="modern"] .workspace-mode-pill {
+    background: #22232a;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="modern"] .workspace-mode-pill:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+html[data-theme="modern"] .workspace-mode-pill.active {
+    background: linear-gradient(135deg, #f4b56a, #e06d4f);
+    color: #18181b;
+    box-shadow: none;
+}
+
+html[data-theme="modern"] .workspace-mode-current,
+html[data-theme="modern"] .welcome-mode-badge {
+    color: #f4b56a;
+}
+
+html[data-theme="modern"] .welcome-mode-badge {
+    background: rgba(244, 181, 106, 0.12);
+    border-color: rgba(244, 181, 106, 0.2);
+}

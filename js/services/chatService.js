@@ -7,6 +7,7 @@ import { storageService } from './storageService.js';
 import { contextService } from './contextService.js';
 import { providerManager } from './providerManager.js';
 import { eventBus, Events } from '../utils/eventBus.js';
+import { normalizeSessionMode } from '../config/sessionModes.js';
 
 /**
  * Generate unique ID for chats
@@ -46,6 +47,7 @@ class ChatService {
         this.chats = {};
         this.folders = {};
         this.currentChatId = null;
+        this.currentMode = 'chat';
         this.pendingFolderId = null;
         // Do NOT call load() here — app.js will call it after storageService.init()
     }
@@ -64,10 +66,32 @@ class ChatService {
             // for large datasets, but for now hydrate all on load)
             await storageService.hydrateAttachments(messages);
             chatMetas[chatId].messages = messages;
+            if (this._normalizeChatMeta(chatMetas[chatId])) {
+                this._persistChat(chatMetas[chatId]);
+            }
         }
 
         this.chats = chatMetas;
         this.folders = storageService.loadFolders();
+    }
+
+    _normalizeChatMeta(chat) {
+        const normalizedMode = normalizeSessionMode(chat.mode);
+        if (chat.mode !== normalizedMode) {
+            chat.mode = normalizedMode;
+            return true;
+        }
+        return false;
+    }
+
+    _setCurrentMode(mode, emit = true) {
+        const normalizedMode = normalizeSessionMode(mode);
+        if (this.currentMode === normalizedMode) return false;
+        this.currentMode = normalizedMode;
+        if (emit) {
+            eventBus.emit(Events.SESSION_MODE_CHANGED, { mode: normalizedMode });
+        }
+        return true;
     }
 
     // ─── Internal persistence helpers ────────────────────────────────────────
@@ -127,6 +151,7 @@ class ChatService {
         this.chats[id] = {
             id,
             title: options.title || 'New Chat',
+            mode: normalizeSessionMode(options.mode || this.currentMode),
             model: options.model || null,
             provider: options.provider || providerManager.getProviderName(),
             messages: seedMessages,
@@ -142,6 +167,7 @@ class ChatService {
         };
 
         this.currentChatId = id;
+        this._setCurrentMode(this.chats[id].mode);
         this._persistChat(this.chats[id]);
         if (seedMessages.length > 0) {
             storageService.saveMessages(id, seedMessages).catch(
@@ -170,13 +196,20 @@ class ChatService {
         return this.currentChatId;
     }
 
+    getCurrentMode() {
+        return this.currentMode;
+    }
+
     /**
      * Select/switch to a chat
      * @param {string} chatId - Chat ID to select
      */
-    selectChat(chatId) {
+    selectChat(chatId, options = {}) {
         if (this.chats[chatId]) {
             this.currentChatId = chatId;
+            if (options.syncMode !== false) {
+                this._setCurrentMode(this.chats[chatId].mode);
+            }
             eventBus.emit(Events.CHAT_SELECTED, {
                 id: chatId,
                 chat: this.chats[chatId]
@@ -190,6 +223,22 @@ class ChatService {
     deselectChat() {
         this.currentChatId = null;
         eventBus.emit(Events.CHAT_SELECTED, { id: null, chat: null });
+    }
+
+    setCurrentMode(mode) {
+        const normalizedMode = normalizeSessionMode(mode);
+        this._setCurrentMode(normalizedMode);
+
+        const currentChat = this.getCurrentChat();
+        if (currentChat?.mode === normalizedMode) return;
+
+        const nextChat = this.getChatsForMode(normalizedMode)[0];
+        if (nextChat) {
+            this.selectChat(nextChat.id, { syncMode: false });
+            return;
+        }
+
+        this.deselectChat();
     }
 
     /**
@@ -427,6 +476,11 @@ class ChatService {
         );
     }
 
+    getChatsForMode(mode = this.currentMode) {
+        const normalizedMode = normalizeSessionMode(mode);
+        return this.getAllChats().filter(chat => normalizeSessionMode(chat.mode) === normalizedMode);
+    }
+
     /**
      * Delete all chats
      */
@@ -489,6 +543,7 @@ class ChatService {
         this.chats[id] = {
             id,
             title: branchTitle,
+            mode: normalizeSessionMode(source.mode),
             model: source.model,
             provider: source.provider,
             messages: clonedMessages,
@@ -562,6 +617,11 @@ class ChatService {
      */
     async importChats(jsonString) {
         this.chats = await storageService.importChats(jsonString, true);
+        Object.values(this.chats).forEach(chat => {
+            if (this._normalizeChatMeta(chat)) {
+                this._persistChat(chat);
+            }
+        });
         eventBus.emit(Events.CHATS_IMPORTED, { chats: this.chats });
     }
 

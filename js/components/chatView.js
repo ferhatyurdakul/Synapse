@@ -10,28 +10,11 @@ import { titleService } from '../services/titleService.js';
 import { toolRegistry } from '../services/toolRegistry.js';
 import { ragService } from '../services/ragService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
+import { getSessionModeConfig } from '../config/sessionModes.js';
 import { renderMarkdown, renderLatexInElement, highlightCodeBlocks, escapeHtml } from '../utils/markdown.js';
 import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js';
 import { getModelParams } from './settingsPanel.js';
 import { toast } from './toast.js';
-
-const PROMPT_EXAMPLES = [
-    { icon: '💡', text: 'Explain quantum computing in simple terms' },
-    { icon: '📝', text: 'Write a short poem about the ocean' },
-    { icon: '🧮', text: 'Solve this: If a train travels 120km in 2 hours, what is its speed?' },
-    { icon: '🌍', text: 'What are the top 5 most visited countries in the world?' },
-    { icon: '🍳', text: 'Give me a quick recipe for pasta carbonara' },
-    { icon: '🎯', text: 'What are some effective productivity techniques?' },
-    { icon: '🧬', text: 'Explain how CRISPR gene editing works' },
-    { icon: '🚀', text: 'Compare SpaceX and NASA approaches to space exploration' },
-    { icon: '🎨', text: 'Describe the differences between impressionism and expressionism' },
-    { icon: '💻', text: 'Explain the difference between REST and GraphQL APIs' },
-    { icon: '📊', text: 'What are the pros and cons of remote work?' },
-    { icon: '🧠', text: 'How does memory work in the human brain?' },
-    { icon: '🎵', text: 'Recommend 5 albums that defined their genre' },
-    { icon: '🏗️', text: 'Explain microservices architecture vs monolithic' },
-    { icon: '🌱', text: 'What are practical ways to reduce carbon footprint?' }
-];
 
 class ChatView {
     constructor(containerId) {
@@ -90,13 +73,18 @@ class ChatView {
         });
     }
 
-    buildWelcomeScreen() {
-        const prompts = this.getRandomPrompts(3);
+    buildWelcomeScreen(mode = chatService.getCurrentMode()) {
+        const config = getSessionModeConfig(mode);
+        const prompts = config.starterPrompts.slice(0, 3);
         return `
             <div class="welcome-message">
                 <div class="welcome-icon">⟩_</div>
-                <h2>Welcome to Synapse</h2>
-                <p>Select a model and try a prompt to get started.</p>
+                <div class="welcome-mode-badge">
+                    <i data-lucide="${config.icon}" class="icon"></i>
+                    <span>${escapeHtml(config.label)}</span>
+                </div>
+                <h2>${escapeHtml(config.emptyStateTitle)}</h2>
+                <p>${escapeHtml(config.emptyStateDescription)}</p>
                 <div class="welcome-prompts">
                     ${prompts.map(p => `
                         <div class="prompt-card" data-prompt="${p.text.replace(/"/g, '&quot;')}">
@@ -107,11 +95,6 @@ class ChatView {
                 </div>
             </div>
         `;
-    }
-
-    getRandomPrompts(count) {
-        const shuffled = [...PROMPT_EXAMPLES].sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, count);
     }
 
     attachPromptClickHandlers() {
@@ -135,6 +118,13 @@ class ChatView {
 
         eventBus.on(Events.CHAT_CREATED, ({ chat }) => {
             this.displayChat(chat);
+        });
+
+        eventBus.on(Events.SESSION_MODE_CHANGED, ({ mode }) => {
+            const chat = chatService.getCurrentChat();
+            if (!chat || chat.mode !== mode) {
+                this.displayChat(chat);
+            }
         });
 
         eventBus.on(Events.MESSAGE_SENT, async ({ content, images, documents }) => {
