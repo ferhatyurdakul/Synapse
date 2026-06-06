@@ -7,7 +7,7 @@ import { storageService } from './storageService.js';
 import { contextService } from './contextService.js';
 import { providerManager } from './providerManager.js';
 import { eventBus, Events } from '../utils/eventBus.js';
-import { normalizeSessionMode } from '../config/sessionModes.js';
+import { getSessionModeConfig, normalizeSessionMode } from '../config/sessionModes.js';
 
 /**
  * Generate unique ID for chats
@@ -40,6 +40,14 @@ function normalizeSeedMessages(messages = []) {
             thinking: msg.role === 'assistant' ? String(msg.thinking || '') : '',
             timestamp: msg.timestamp || new Date().toISOString()
         }));
+}
+
+function cloneChatMessage(message, idFactory) {
+    const clone = { ...message, id: idFactory() };
+    if (clone.images) clone.images = [...clone.images];
+    if (clone.documents) clone.documents = [...clone.documents];
+    if (clone.attachmentIds) clone.attachmentIds = [...clone.attachmentIds];
+    return clone;
 }
 
 class ChatService {
@@ -597,6 +605,103 @@ class ChatService {
     }
 
     /**
+     * Branch an entire session into a new workspace mode without changing the source.
+     * @param {string} sourceChatId - Chat to branch from
+     * @param {string} targetMode - Mode for the new branched session
+     * @returns {Promise<string>} New branch chat ID
+     */
+    async branchChatToMode(sourceChatId, targetMode) {
+        const source = this.chats[sourceChatId];
+        if (!source) throw new Error('Source chat not found');
+
+        const normalizedMode = normalizeSessionMode(targetMode);
+        const id = generateId();
+        const now = new Date().toISOString();
+        const oldToNewMsgId = new Map();
+        const clonedMessages = source.messages.map(msg => {
+            const clone = cloneChatMessage(msg, generateId);
+            oldToNewMsgId.set(msg.id, clone.id);
+            return clone;
+        });
+
+        const targetConfig = getSessionModeConfig(normalizedMode);
+        const titleBase = source.title || 'New Chat';
+        const branchTitle = `${targetConfig.shortLabel}: ${titleBase}`.slice(0, 60);
+        const forkedFromMessageId = source.messages[source.messages.length - 1]?.id || null;
+
+        this.chats[id] = {
+            ...source,
+            id,
+            title: branchTitle,
+            mode: normalizedMode,
+            messages: clonedMessages,
+            summary: null,
+            summarizedUpTo: 0,
+            lastTokenCount: source.lastTokenCount || 0,
+            parentChatId: sourceChatId,
+            forkedFromMessageId,
+            createdAt: now,
+            updatedAt: now
+        };
+
+        this._persistChat(this.chats[id]);
+
+        for (const msg of clonedMessages) {
+            storageService.saveMessage(id, msg);
+        }
+
+        try {
+            const sourceAttachments = await storageService.getAttachmentsForChat(sourceChatId);
+            for (const att of sourceAttachments) {
+                const newMsgId = oldToNewMsgId.get(att.messageId);
+                if (!newMsgId) continue;
+                const newAttId = storageService._generateId();
+                await storageService.saveAttachment(newAttId, id, newMsgId, att.blob, att.mimeType);
+
+                const clonedMsg = clonedMessages.find(message => message.id === newMsgId);
+                if (clonedMsg?.attachmentIds) {
+                    const oldIdx = clonedMsg.attachmentIds.indexOf(att.id);
+                    if (oldIdx >= 0) clonedMsg.attachmentIds[oldIdx] = newAttId;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to duplicate attachments for mode branch:', e);
+        }
+
+        this.currentChatId = id;
+        this._setCurrentMode(normalizedMode);
+        eventBus.emit(Events.CHAT_FORKED, { id, parentChatId: sourceChatId, forkedFromMessageId });
+        eventBus.emit(Events.CHAT_CREATED, { id, chat: this.chats[id] });
+
+        return id;
+    }
+
+    /**
+     * Convert an existing session into another workspace mode in place.
+     * @param {string} chatId - Chat to convert
+     * @param {string} targetMode - Mode to assign
+     */
+    convertChatToMode(chatId, targetMode) {
+        const chat = this.chats[chatId];
+        if (!chat) throw new Error('Chat not found');
+
+        const normalizedMode = normalizeSessionMode(targetMode);
+        if (chat.mode === normalizedMode) return;
+
+        chat.mode = normalizedMode;
+        chat.updatedAt = new Date().toISOString();
+        this._persistChat(chat);
+
+        if (this.currentChatId === chatId) {
+            this._setCurrentMode(normalizedMode);
+            eventBus.emit(Events.CHAT_SELECTED, { id: chatId, chat });
+            return;
+        }
+
+        eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat });
+    }
+
+    /**
      * Export a specific chat as JSON
      */
     exportChat(chatId) {
@@ -792,6 +897,99 @@ class ChatService {
         if (!chatId || !this.chats[chatId]) return;
         this.chats[chatId].systemPrompt = prompt ?? '';
         this._persistChat(this.chats[chatId]);
+        eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat: this.chats[chatId] });
+    }
+
+    // ── Mode transitions ──
+
+    /**
+     * Branch a session to a different mode.
+     * Creates a new chat with the full message history in the target mode,
+     * linked to the source via parentChatId.
+     * @param {string} sourceChatId - Chat to branch from
+     * @param {string} targetMode - Target mode for the new chat
+     * @returns {Promise<string>} New branch chat ID
+     */
+    async branchToMode(sourceChatId, targetMode) {
+        const source = this.chats[sourceChatId];
+        if (!source) throw new Error('Source chat not found');
+
+        const id = generateId();
+        const now = new Date().toISOString();
+        const normalizedTarget = normalizeSessionMode(targetMode);
+
+        // Deep-clone all messages with new IDs
+        const oldToNewMsgId = new Map();
+        const clonedMessages = source.messages.map(msg => {
+            const newMsgId = generateId();
+            oldToNewMsgId.set(msg.id, newMsgId);
+            const clone = { ...msg, id: newMsgId };
+            if (clone.images) clone.images = [...clone.images];
+            if (clone.documents) clone.documents = [...clone.documents];
+            if (clone.attachmentIds) clone.attachmentIds = [...clone.attachmentIds];
+            return clone;
+        });
+
+        this.chats[id] = {
+            id,
+            title: source.title || 'New Chat',
+            mode: normalizedTarget,
+            model: source.model,
+            provider: source.provider,
+            messages: clonedMessages,
+            summary: null,
+            summarizedUpTo: 0,
+            lastTokenCount: 0,
+            parentChatId: sourceChatId,
+            forkedFromMessageId: source.messages.length > 0
+                ? source.messages[source.messages.length - 1].id
+                : null,
+            folderId: source.folderId || undefined,
+            createdAt: now,
+            updatedAt: now
+        };
+
+        this._persistChat(this.chats[id]);
+        for (const msg of clonedMessages) {
+            storageService.saveMessage(id, msg);
+        }
+
+        // Duplicate image attachments from source
+        try {
+            const sourceAttachments = await storageService.getAttachmentsForChat(sourceChatId);
+            for (const att of sourceAttachments) {
+                const newMsgId = oldToNewMsgId.get(att.messageId);
+                if (!newMsgId) continue;
+                const newAttId = storageService._generateId();
+                await storageService.saveAttachment(newAttId, id, newMsgId, att.blob, att.mimeType);
+                const clonedMsg = clonedMessages.find(m => m.id === newMsgId);
+                if (clonedMsg?.attachmentIds) {
+                    const oldIdx = clonedMsg.attachmentIds.indexOf(att.id);
+                    if (oldIdx >= 0) clonedMsg.attachmentIds[oldIdx] = newAttId;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to duplicate attachments for mode branch:', e);
+        }
+
+        eventBus.emit(Events.CHAT_FORKED, { id, parentChatId: sourceChatId });
+        eventBus.emit(Events.CHAT_CREATED, { id, chat: this.chats[id] });
+
+        return id;
+    }
+
+    /**
+     * Convert a session's mode in place.
+     * @param {string} chatId - Chat to convert
+     * @param {string} targetMode - New mode
+     */
+    convertToMode(chatId, targetMode) {
+        if (!this.chats[chatId]) return;
+        const normalizedMode = normalizeSessionMode(targetMode);
+        this.chats[chatId].mode = normalizedMode;
+        this.chats[chatId].updatedAt = new Date().toISOString();
+        this._persistChat(this.chats[chatId]);
+        this._setCurrentMode(normalizedMode);
         eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat: this.chats[chatId] });
     }
 }

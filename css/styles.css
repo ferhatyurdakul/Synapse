@@ -3065,6 +3065,49 @@ body::before {
     border-color: #e74c3c;
 }
 
+.confirm-btn.primary {
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    color: var(--bg-primary);
+}
+
+.confirm-btn.primary:hover {
+    filter: brightness(1.08);
+}
+
+.mode-transition-panel {
+    max-width: 420px;
+}
+
+.mode-transition-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 20px;
+    color: var(--text-secondary);
+}
+
+.mode-transition-summary .icon {
+    width: 14px;
+    height: 14px;
+    color: var(--accent-cyan);
+}
+
+.mode-transition-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 11px;
+}
+
+.mode-transition-actions {
+    flex-wrap: wrap;
+}
+
 /* ===== Export Modal ===== */
 .export-modal {
     position: fixed;
@@ -4139,4 +4182,3 @@ body::before {
     width: 12px;
     height: 12px;
 }
-
