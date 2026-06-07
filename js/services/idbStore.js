@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -49,6 +49,26 @@ const STORES = {
         keyPath: 'id',
         indexes: [
             { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    agentRuns: {
+        version: 5,
+        keyPath: 'id',
+        indexes: [
+            { name: 'chatId', keyPath: 'chatId' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'startedAt', keyPath: 'startedAt' }
+        ]
+    },
+    agentRunEvents: {
+        version: 5,
+        keyPath: 'id',
+        indexes: [
+            { name: 'runId', keyPath: 'runId' },
+            { name: 'chatId', keyPath: 'chatId' },
+            { name: 'timestamp', keyPath: 'timestamp' },
+            { name: 'runId_timestamp', keyPath: ['runId', 'timestamp'] }
         ]
     },
 

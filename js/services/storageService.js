@@ -272,6 +272,95 @@ class StorageService {
         await putRecords('messages', records);
     }
 
+    // ─── Agent runs ─────────────────────────────────────────────────────────
+
+    /**
+     * Load all persisted agent runs, newest first.
+     * @returns {Promise<Object[]>}
+     */
+    async loadAgentRuns() {
+        const runs = await getAllRecords('agentRuns');
+        runs.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+        return runs;
+    }
+
+    /**
+     * Load all agent runs for a chat, newest first.
+     * @param {string} chatId
+     * @returns {Promise<Object[]>}
+     */
+    async loadAgentRunsForChat(chatId) {
+        const runs = await getRecordsByIndex('agentRuns', 'chatId', chatId);
+        runs.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+        return runs;
+    }
+
+    /**
+     * Load a single agent run by ID.
+     * @param {string} runId
+     * @returns {Promise<Object|undefined>}
+     */
+    async getAgentRun(runId) {
+        return getRecord('agentRuns', runId);
+    }
+
+    /**
+     * Persist a single agent run snapshot.
+     * @param {Object} run
+     * @returns {Promise<void>}
+     */
+    async saveAgentRun(run) {
+        await putRecord('agentRuns', run);
+    }
+
+    /**
+     * Persist multiple agent run snapshots in one transaction.
+     * @param {Object[]} runs
+     * @returns {Promise<void>}
+     */
+    async saveAgentRuns(runs) {
+        await putRecords('agentRuns', runs);
+    }
+
+    /**
+     * Load the event log for an agent run.
+     * @param {string} runId
+     * @returns {Promise<Object[]>}
+     */
+    async loadAgentRunEvents(runId) {
+        const events = await getRecordsByIndex('agentRunEvents', 'runId', runId);
+        events.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+        return events;
+    }
+
+    /**
+     * Persist a single agent run event.
+     * @param {Object} event
+     * @returns {Promise<void>}
+     */
+    async saveAgentRunEvent(event) {
+        await putRecord('agentRunEvents', event);
+    }
+
+    /**
+     * Persist multiple agent run events in one transaction.
+     * @param {Object[]} events
+     * @returns {Promise<void>}
+     */
+    async saveAgentRunEvents(events) {
+        await putRecords('agentRunEvents', events);
+    }
+
+    /**
+     * Delete an agent run and its event history.
+     * @param {string} runId
+     * @returns {Promise<void>}
+     */
+    async deleteAgentRun(runId) {
+        await deleteRecord('agentRuns', runId);
+        await deleteByIndex('agentRunEvents', 'runId', runId);
+    }
+
     /**
      * Delete a chat and all its messages and attachments.
      * @param {string} chatId
@@ -282,6 +371,8 @@ class StorageService {
         await deleteRecord('chats', chatId);
         await deleteByIndex('messages', 'chatId', chatId);
         await deleteByIndex('attachments', 'chatId', chatId);
+        await deleteByIndex('agentRuns', 'chatId', chatId);
+        await deleteByIndex('agentRunEvents', 'chatId', chatId);
     }
 
     /**
@@ -421,6 +512,8 @@ class StorageService {
         await clearStore('chats');
         await clearStore('messages');
         await clearStore('attachments');
+        await clearStore('agentRuns');
+        await clearStore('agentRunEvents');
         await clearStore('folders');
         this._foldersCache = {};
     }
@@ -433,6 +526,8 @@ class StorageService {
         await clearStore('chats');
         await clearStore('messages');
         await clearStore('attachments');
+        await clearStore('agentRuns');
+        await clearStore('agentRunEvents');
         await clearStore('settings');
         await clearStore('folders');
         await clearStore('modelSettings');
@@ -459,6 +554,8 @@ class StorageService {
         const chatCount = await countRecords('chats');
         const messageCount = await countRecords('messages');
         const attachmentCount = await countRecords('attachments');
+        const agentRunCount = await countRecords('agentRuns');
+        const agentRunEventCount = await countRecords('agentRunEvents');
 
         return {
             used: estimate.usage || 0,
@@ -466,7 +563,9 @@ class StorageService {
             indexedDbUsed: estimate.usageDetails?.indexedDB ?? null,
             chatCount,
             messageCount,
-            attachmentCount
+            attachmentCount,
+            agentRunCount,
+            agentRunEventCount
         };
     }
 

@@ -12,6 +12,7 @@ import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
 import { chatService } from './services/chatService.js';
+import { agentRunService } from './services/agentRunService.js';
 import { providerManager } from './services/providerManager.js';
 import { eventBus, Events } from './utils/eventBus.js';
 import { toast } from './components/toast.js';
@@ -37,6 +38,7 @@ class App {
         providerManager.reload(); // re-read saved provider settings from IDB cache
         themeService.applyTheme();
         await chatService.load();
+        await agentRunService.load();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();

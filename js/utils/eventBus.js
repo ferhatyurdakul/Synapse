@@ -135,6 +135,12 @@ export const Events = {
     WEB_SEARCH_TOGGLED: 'tool:webSearchToggled',
     TOOLS_CAPABILITY_CHANGED: 'tool:capabilityChanged',
 
+    // Agent run events
+    AGENT_RUN_CREATED: 'agentRun:created',
+    AGENT_RUN_UPDATED: 'agentRun:updated',
+    AGENT_RUN_DELETED: 'agentRun:deleted',
+    AGENT_RUN_EVENT_RECORDED: 'agentRun:eventRecorded',
+
     // RAG events
     RAG_COLLECTION_CREATED: 'rag:collectionCreated',
     RAG_COLLECTION_DELETED: 'rag:collectionDeleted',
