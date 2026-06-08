@@ -9,12 +9,114 @@ import { providerManager } from '../services/providerManager.js';
 import { titleService } from '../services/titleService.js';
 import { toolRegistry } from '../services/toolRegistry.js';
 import { ragService } from '../services/ragService.js';
+import { agentRunService } from '../services/agentRunService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { getSessionModeConfig } from '../config/sessionModes.js';
 import { renderMarkdown, renderLatexInElement, highlightCodeBlocks, escapeHtml } from '../utils/markdown.js';
 import { createThinkingBlock, updateThinkingBlock, getDefaultCollapsedState } from './thinkingBlock.js';
 import { getModelParams } from './settingsPanel.js';
 import { toast } from './toast.js';
+
+const RUN_STATUS_LABELS = {
+    pending: 'Pending',
+    running: 'Running',
+    completed: 'Completed',
+    failed: 'Failed',
+    cancelled: 'Cancelled'
+};
+
+const STEP_STATUS_LABELS = {
+    pending: 'Pending',
+    running: 'Running',
+    completed: 'Completed',
+    failed: 'Failed'
+};
+
+function formatDateTime(value) {
+    if (!value) return 'Not started';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown time';
+    return date.toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatShortTime(value) {
+    if (!value) return 'No timestamp';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown time';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatDuration(startedAt, finishedAt) {
+    if (!startedAt || !finishedAt) return null;
+    const start = new Date(startedAt).getTime();
+    const end = new Date(finishedAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+
+    const totalSeconds = Math.round((end - start) / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts = [];
+
+    if (hours) parts.push(`${hours}h`);
+    if (minutes || hours) parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+
+    return parts.join(' ');
+}
+
+function formatJsonPreview(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return String(value);
+    }
+}
+
+function buildTextBlock(label, value) {
+    const text = formatJsonPreview(value).trim();
+    if (!text) return '';
+
+    return `
+        <div class="agent-run-detail-block">
+            <div class="agent-run-detail-label">${escapeHtml(label)}</div>
+            <pre class="agent-run-text-block">${escapeHtml(text)}</pre>
+        </div>
+    `;
+}
+
+function summarizeTimelineEvent(event) {
+    const payload = event?.payload || {};
+
+    switch (event?.type) {
+        case 'run-created':
+            return payload.objective
+                ? `Run created for "${payload.objective}"`
+                : 'Run created';
+        case 'status-changed':
+            return `Status changed to ${RUN_STATUS_LABELS[payload.status] || payload.status || 'Unknown'}`;
+        case 'step-added':
+            return `Step added: ${payload.title || 'Untitled step'}`;
+        case 'step-updated':
+            return `Step updated: ${payload.title || 'Untitled step'} (${STEP_STATUS_LABELS[payload.status] || payload.status || 'pending'})`;
+        case 'tool-call-recorded':
+            return `Tool call: ${payload.toolCall?.toolName || 'unknown-tool'}`;
+        case 'output-appended':
+            return 'Run output updated';
+        case 'error-recorded':
+            return payload.message ? `Error: ${payload.message}` : 'Run error recorded';
+        default:
+            return event?.type || 'Event recorded';
+    }
+}
 
 class ChatView {
     constructor(containerId) {
@@ -24,6 +126,7 @@ class ChatView {
         this.selectedModel = null;
         this.activeStreams = new Map(); // chatId -> stream state
         this.webSearchEnabled = false;
+        this.agentRunPanelRequestId = 0;
 
         this.init();
     }
@@ -43,6 +146,7 @@ class ChatView {
     render() {
         this.container.innerHTML = `
             <div class="chat-view">
+                <section id="agent-runs-panel" class="agent-runs-panel hidden"></section>
                 <div id="messages-container" class="messages-container">
                     ${this.buildWelcomeScreen()}
                 </div>
@@ -135,6 +239,31 @@ class ChatView {
             this.webSearchEnabled = enabled;
         });
 
+        const rerenderAgentRuns = (chatId = null) => {
+            const chat = chatService.getCurrentChat();
+            if (!chat || chat.mode !== 'agent') return;
+            if (chatId && chat.id !== chatId) return;
+            this.renderAgentRuns(chat);
+        };
+
+        eventBus.on(Events.AGENT_RUN_CREATED, ({ run }) => {
+            rerenderAgentRuns(run?.chatId);
+        });
+
+        eventBus.on(Events.AGENT_RUN_UPDATED, ({ run }) => {
+            rerenderAgentRuns(run?.chatId);
+        });
+
+        eventBus.on(Events.AGENT_RUN_DELETED, () => {
+            const chat = chatService.getCurrentChat();
+            if (!chat || chat.mode !== 'agent') return;
+            this.renderAgentRuns(chat);
+        });
+
+        eventBus.on(Events.AGENT_RUN_EVENT_RECORDED, ({ runId }) => {
+            const run = agentRunService.getRun(runId);
+            rerenderAgentRuns(run?.chatId);
+        });
 
         eventBus.on(Events.STREAM_END, ({ aborted }) => {
             if (aborted) {
@@ -277,6 +406,7 @@ class ChatView {
     displayChat(chat) {
         const container = document.getElementById('messages-container');
         container.innerHTML = '';
+        this.renderAgentRuns(chat);
 
         if (!chat || chat.messages.length === 0) {
             container.innerHTML = this.buildWelcomeScreen();
@@ -350,6 +480,243 @@ class ChatView {
         }
 
         this.scrollToBottom(true);
+    }
+
+    async renderAgentRuns(chat) {
+        const panel = document.getElementById('agent-runs-panel');
+        const requestId = ++this.agentRunPanelRequestId;
+        if (!panel) return;
+
+        if (!chat || chat.mode !== 'agent') {
+            panel.innerHTML = '';
+            panel.classList.add('hidden');
+            return;
+        }
+
+        panel.classList.remove('hidden');
+        panel.innerHTML = this.buildAgentRunPanelShell(chat);
+
+        const runs = agentRunService.getRunsForChat(chat.id);
+        if (runs.length === 0) {
+            if (requestId !== this.agentRunPanelRequestId) return;
+            panel.innerHTML = this.buildAgentRunEmptyState();
+            refreshIcons();
+            return;
+        }
+
+        try {
+            const timelineEntries = await Promise.all(
+                runs.map(async run => ({
+                    run,
+                    events: (await agentRunService.getRunTimeline(run.id))
+                        .slice()
+                        .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+                }))
+            );
+
+            if (requestId !== this.agentRunPanelRequestId) return;
+            panel.innerHTML = this.buildAgentRunPanel(chat, timelineEntries);
+            refreshIcons();
+        } catch (error) {
+            if (requestId !== this.agentRunPanelRequestId) return;
+            panel.innerHTML = `
+                <section class="agent-run-surface">
+                    <div class="agent-run-panel-header">
+                        <div>
+                            <p class="agent-run-panel-eyebrow">Agent Timeline</p>
+                            <h3>Runs for this chat</h3>
+                        </div>
+                    </div>
+                    <div class="agent-run-empty-state error">
+                        <i data-lucide="alert-triangle" class="icon"></i>
+                        <div>
+                            <strong>Could not load run history.</strong>
+                            <p>${escapeHtml(error.message || 'Unknown error')}</p>
+                        </div>
+                    </div>
+                </section>
+            `;
+            refreshIcons();
+        }
+    }
+
+    buildAgentRunPanelShell(chat) {
+        return `
+            <section class="agent-run-surface">
+                <div class="agent-run-panel-header">
+                    <div>
+                        <p class="agent-run-panel-eyebrow">Agent Timeline</p>
+                        <h3>Runs for ${escapeHtml(chat.title || 'this agent chat')}</h3>
+                    </div>
+                    <span class="agent-run-panel-meta">Loading run history…</span>
+                </div>
+            </section>
+        `;
+    }
+
+    buildAgentRunEmptyState() {
+        return `
+            <section class="agent-run-surface">
+                <div class="agent-run-panel-header">
+                    <div>
+                        <p class="agent-run-panel-eyebrow">Agent Timeline</p>
+                        <h3>Runs for this chat</h3>
+                    </div>
+                    <span class="agent-run-panel-meta">0 runs</span>
+                </div>
+                <div class="agent-run-empty-state">
+                    <i data-lucide="bot" class="icon"></i>
+                    <div>
+                        <strong>No agent runs yet.</strong>
+                        <p>Agent execution history will appear here once a task creates a run.</p>
+                    </div>
+                </div>
+            </section>
+        `;
+    }
+
+    buildAgentRunPanel(chat, timelineEntries) {
+        return `
+            <section class="agent-run-surface">
+                <div class="agent-run-panel-header">
+                    <div>
+                        <p class="agent-run-panel-eyebrow">Agent Timeline</p>
+                        <h3>Runs for ${escapeHtml(chat.title || 'this agent chat')}</h3>
+                    </div>
+                    <span class="agent-run-panel-meta">${timelineEntries.length} run${timelineEntries.length === 1 ? '' : 's'}</span>
+                </div>
+                <div class="agent-run-list">
+                    ${timelineEntries.map(({ run, events }) => this.buildAgentRunCard(run, events)).join('')}
+                </div>
+            </section>
+        `;
+    }
+
+    buildAgentRunCard(run, events) {
+        const duration = formatDuration(run.startedAt, run.finishedAt);
+        const runTitle = run.title || run.objective || 'Untitled agent run';
+        const timelineHtml = events.length
+            ? events.map(event => this.buildTimelineEvent(event)).join('')
+            : '<div class="agent-run-empty-inline">No timeline events recorded yet.</div>';
+        const stepsHtml = run.steps.length
+            ? run.steps.map(step => this.buildRunStep(step)).join('')
+            : '<div class="agent-run-empty-inline">No steps recorded yet.</div>';
+
+        return `
+            <article class="agent-run-card status-${escapeHtml(run.status)}">
+                <div class="agent-run-card-header">
+                    <div class="agent-run-heading">
+                        <h4>${escapeHtml(runTitle)}</h4>
+                        ${run.objective && run.objective !== runTitle ? `<p>${escapeHtml(run.objective)}</p>` : ''}
+                    </div>
+                    <span class="agent-run-status-badge status-${escapeHtml(run.status)}">${escapeHtml(RUN_STATUS_LABELS[run.status] || run.status || 'Pending')}</span>
+                </div>
+                <div class="agent-run-meta-grid">
+                    <div class="agent-run-meta-chip">
+                        <span class="label">Created</span>
+                        <span>${escapeHtml(formatDateTime(run.createdAt))}</span>
+                    </div>
+                    <div class="agent-run-meta-chip">
+                        <span class="label">Started</span>
+                        <span>${escapeHtml(formatDateTime(run.startedAt))}</span>
+                    </div>
+                    <div class="agent-run-meta-chip">
+                        <span class="label">Updated</span>
+                        <span>${escapeHtml(formatDateTime(run.updatedAt))}</span>
+                    </div>
+                    <div class="agent-run-meta-chip">
+                        <span class="label">Finished</span>
+                        <span>${escapeHtml(formatDateTime(run.finishedAt))}</span>
+                    </div>
+                    <div class="agent-run-meta-chip">
+                        <span class="label">Duration</span>
+                        <span>${escapeHtml(duration || 'In progress')}</span>
+                    </div>
+                    <div class="agent-run-meta-chip">
+                        <span class="label">Steps</span>
+                        <span>${run.steps.length}</span>
+                    </div>
+                </div>
+                ${buildTextBlock('Summary', run.summary)}
+                ${buildTextBlock('Output', run.output)}
+                ${buildTextBlock('Error', run.error)}
+                <div class="agent-run-section-grid">
+                    <section class="agent-run-section">
+                        <div class="agent-run-section-title">
+                            <i data-lucide="list-todo" class="icon"></i>
+                            <span>Steps</span>
+                        </div>
+                        <div class="agent-run-section-body">
+                            ${stepsHtml}
+                        </div>
+                    </section>
+                    <section class="agent-run-section">
+                        <div class="agent-run-section-title">
+                            <i data-lucide="activity" class="icon"></i>
+                            <span>Timeline</span>
+                        </div>
+                        <div class="agent-run-section-body agent-run-timeline">
+                            ${timelineHtml}
+                        </div>
+                    </section>
+                </div>
+            </article>
+        `;
+    }
+
+    buildRunStep(step) {
+        const toolCalls = step.toolCalls.length
+            ? `
+                <div class="agent-run-tool-list">
+                    ${step.toolCalls.map(toolCall => `
+                        <div class="agent-run-tool-call">
+                            <div class="agent-run-tool-call-header">
+                                <span class="agent-run-tool-name">${escapeHtml(toolCall.toolName)}</span>
+                                <span class="agent-run-mini-status status-${escapeHtml(toolCall.status)}">${escapeHtml(STEP_STATUS_LABELS[toolCall.status] || toolCall.status || 'Pending')}</span>
+                            </div>
+                            ${buildTextBlock('Input', toolCall.input)}
+                            ${buildTextBlock('Output', toolCall.output)}
+                            ${buildTextBlock('Error', toolCall.error)}
+                        </div>
+                    `).join('')}
+                </div>
+            `
+            : '<div class="agent-run-empty-inline">No tool calls recorded.</div>';
+
+        return `
+            <article class="agent-run-step status-${escapeHtml(step.status)}">
+                <div class="agent-run-step-header">
+                    <div>
+                        <strong>${escapeHtml(step.title)}</strong>
+                        <p>${escapeHtml(formatDateTime(step.startedAt))}${step.finishedAt ? ` to ${escapeHtml(formatDateTime(step.finishedAt))}` : ''}</p>
+                    </div>
+                    <span class="agent-run-mini-status status-${escapeHtml(step.status)}">${escapeHtml(STEP_STATUS_LABELS[step.status] || step.status || 'Pending')}</span>
+                </div>
+                ${buildTextBlock('Step output', step.output)}
+                ${buildTextBlock('Step error', step.error)}
+                <div class="agent-run-step-tools">
+                    <div class="agent-run-subheading">Tool activity</div>
+                    ${toolCalls}
+                </div>
+            </article>
+        `;
+    }
+
+    buildTimelineEvent(event) {
+        const payloadPreview = buildTextBlock('Event payload', event.payload);
+        return `
+            <article class="agent-run-event">
+                <div class="agent-run-event-marker"></div>
+                <div class="agent-run-event-body">
+                    <div class="agent-run-event-header">
+                        <strong>${escapeHtml(summarizeTimelineEvent(event))}</strong>
+                        <span>${escapeHtml(formatShortTime(event.timestamp))}</span>
+                    </div>
+                    <div class="agent-run-event-type">${escapeHtml(event.type || 'event')}</div>
+                    ${payloadPreview}
+                </div>
+            </article>
+        `;
     }
 
     async handleUserMessage(content, images = null, documents = null) {

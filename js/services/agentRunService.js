@@ -76,8 +76,7 @@ function normalizeStep(step = {}, timestamp = now()) {
 }
 
 function normalizeRun(run = {}) {
-    const createdAt = run.createdAt || run.startedAt || now();
-    const startedAt = run.startedAt || createdAt;
+    const createdAt = run.createdAt || now();
     return {
         id: run.id || generateId(),
         chatId: run.chatId || null,
@@ -88,11 +87,11 @@ function normalizeRun(run = {}) {
         output: run.output ? String(run.output) : '',
         error: run.error ? String(run.error) : null,
         createdAt,
-        startedAt,
+        startedAt: run.startedAt || null,
         finishedAt: run.finishedAt || null,
         updatedAt: run.updatedAt || createdAt,
         steps: Array.isArray(run.steps)
-            ? run.steps.map(step => normalizeStep(step, startedAt))
+            ? run.steps.map(step => normalizeStep(step, run.startedAt || createdAt))
             : []
     };
 }
@@ -131,11 +130,14 @@ class AgentRunService {
 
     async createRun(input = {}) {
         const timestamp = now();
+        const status = normalizeRunStatus(input.status);
         const run = normalizeRun({
             ...input,
-            status: input.status || 'pending',
+            status,
             createdAt: timestamp,
-            startedAt: input.startedAt || timestamp,
+            startedAt: input.startedAt !== undefined
+                ? input.startedAt
+                : (status !== 'pending' ? timestamp : undefined),
             updatedAt: timestamp
         });
 
@@ -159,6 +161,7 @@ class AgentRunService {
             ...current,
             ...cloneValue(patch),
             id: current.id,
+            chatId: current.chatId,
             createdAt: current.createdAt,
             updatedAt: now()
         });
@@ -171,7 +174,10 @@ class AgentRunService {
 
     async setRunStatus(runId, status, details = {}) {
         const timestamp = now();
-        const run = await this.updateRun(runId, {
+        const current = this.getRun(runId);
+        if (!current) throw new Error(`Agent run not found: ${runId}`);
+
+        const patch = {
             status,
             finishedAt: ['completed', 'failed', 'cancelled'].includes(status)
                 ? (details.finishedAt || timestamp)
@@ -179,7 +185,13 @@ class AgentRunService {
             summary: details.summary,
             output: details.output,
             error: details.error
-        });
+        };
+        // Set startedAt when transitioning to running for the first time
+        if (status === 'running' && !current.startedAt) {
+            patch.startedAt = details.startedAt || timestamp;
+        }
+
+        const run = await this.updateRun(runId, patch);
 
         const event = createRunEvent(run, 'status-changed', {
             status: run.status,
@@ -285,6 +297,36 @@ class AgentRunService {
         await storageService.deleteAgentRun(runId);
         eventBus.emit(Events.AGENT_RUN_DELETED, { runId });
     }
+
+    /**
+     * Remove all in-memory runs for a chat. IDB cleanup is already
+     * handled by storageService.deleteChat / clearChats.
+     * @param {string} chatId
+     */
+    deleteRunsForChat(chatId) {
+        const runs = this.getRunsForChat(chatId);
+        for (const run of runs) {
+            delete this.runs[run.id];
+            eventBus.emit(Events.AGENT_RUN_DELETED, { runId: run.id });
+        }
+    }
+
+    /**
+     * Clear the entire in-memory run cache.
+     * IDB cleanup is already handled by storageService.clearChats / clearAll.
+     */
+    clearRuns() {
+        this.runs = {};
+    }
 }
 
 export const agentRunService = new AgentRunService();
+
+// Keep in-memory cache in sync when chats are deleted via chatService.
+eventBus.on(Events.CHAT_DELETED, ({ id, all }) => {
+    if (all) {
+        agentRunService.clearRuns();
+    } else if (id) {
+        agentRunService.deleteRunsForChat(id);
+    }
+});
