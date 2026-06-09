@@ -19,6 +19,7 @@ import { toast } from './components/toast.js';
 import { themeService } from './services/themeService.js';
 import './tools/builtins.js'; // registers built-in tools into toolRegistry
 import './tools/webSearch.js'; // registers web search tool
+import './tools/backendTools.js'; // registers backend tool runner tools
 
 class App {
     constructor() {

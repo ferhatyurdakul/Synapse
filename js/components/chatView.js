@@ -816,10 +816,11 @@ class ChatView {
                 streamState.contentEl.innerHTML = '<span class="waiting-hint"><span class="blink-dot">●</span> Waiting for model...</span>';
             }
 
-            // Build tool list: builtins from settings, web search from toggle
+            // Build tool list: builtins from settings, backend tools in Agent mode, web search from toggle
             const enabledCategories = [];
             const settings = storageService.loadSettings();
             if (settings.toolsEnabled !== false) enabledCategories.push('builtin');
+            if (chat.mode === 'agent') enabledCategories.push('backend');
             if (this.webSearchEnabled) enabledCategories.push('web_search');
             const tools = enabledCategories.length > 0
                 ? toolRegistry.getSchemas({ categories: enabledCategories })
@@ -946,6 +947,14 @@ class ChatView {
                         toolResult = await toolRegistry.execute(name, args);
                     } catch (err) {
                         toolResult = `Error: ${err.message}`;
+                    }
+
+                    const toolInput = formatJsonPreview(args) || '{}';
+                    const toolMessageIndex = chatService.addToolMessageToChat(streamChatId, name, toolInput, toolResult);
+                    if (isViewing()) {
+                        const activeChat = chatService.getChat(streamChatId);
+                        const toolMessage = activeChat?.messages?.[toolMessageIndex];
+                        if (toolMessage) this.appendToolMessage(toolMessage, toolMessageIndex);
                     }
 
                     apiMessages.push({

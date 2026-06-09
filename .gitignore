@@ -20,6 +20,8 @@ package-lock.json
 # Logs
 *.log
 npm-debug.log*
+.audit/
+__pycache__/
 
 # Local config / secrets
 .env
