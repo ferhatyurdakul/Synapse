@@ -52,6 +52,9 @@ TOOL_TIMEOUT_SECONDS = 30
 # Thread pool semaphore for concurrency control
 _tool_semaphore = threading.Semaphore(MAX_CONCURRENT_TOOLS)
 
+# Server start time for uptime tracking
+_server_start_time = time.monotonic()
+
 
 # ── Tool schemas (OpenAI function-calling format) ──────────────────────────────
 
@@ -401,6 +404,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._proxy_brave()
         elif self.path == "/api/tools/list":
             self._handle_tools_list()
+        elif self.path == "/api/health":
+            self._handle_health()
         else:
             super().do_GET()
 
@@ -464,7 +469,51 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Subscription-Token, Accept")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
-    # ── Backend tool endpoints ──────────────────────────────────────────────
+    # ── Health & tool endpoints ──────────────────────────────────────────────
+
+    def _handle_health(self):
+        """GET /api/health — lightweight server health check."""
+        uptime_s = round(time.monotonic() - _server_start_time, 1)
+        checks = {
+            "server": {"ok": True, "detail": "Running"},
+            "tool_runner": {"ok": True, "detail": f"{len(TOOL_SCHEMAS)} tools registered"},
+            "audit_log": {"ok": True, "path": AUDIT_LOG_PATH},
+        }
+
+        # Check audit log is writable
+        try:
+            os.makedirs(os.path.dirname(AUDIT_LOG_PATH), exist_ok=True)
+            with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+                pass
+        except Exception as e:
+            checks["audit_log"] = {"ok": False, "detail": str(e)}
+
+        # Count audit log entries (last 100 lines max)
+        audit_count = 0
+        try:
+            with open(AUDIT_LOG_PATH, "r", encoding="utf-8") as f:
+                for _ in f:
+                    audit_count += 1
+        except FileNotFoundError:
+            pass
+
+        all_ok = all(c["ok"] for c in checks.values())
+        payload = {
+            "ok": all_ok,
+            "version": "1.0",
+            "uptime": f"{uptime_s}s",
+            "uptime_seconds": uptime_s,
+            "workspace": WORKSPACE_ROOT,
+            "audit_entries": audit_count,
+            "checks": checks,
+        }
+
+        body = json.dumps(payload, default=str).encode()
+        self.send_response(200)
+        self._cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _handle_tools_list(self):
         """GET /api/tools/list — return available tools with schemas and policies."""

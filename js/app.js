@@ -8,6 +8,7 @@ import { createChatSidebar } from './components/chatSidebar.js';
 import { createChatView } from './components/chatView.js';
 import { createInputArea } from './components/inputArea.js';
 import { createSettingsPanel } from './components/settingsPanel.js';
+import { createDiagnosticsPanel } from './components/diagnosticsPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -27,6 +28,7 @@ class App {
         this.chatSidebar = null;
         this.chatView = null;
         this.inputArea = null;
+        this.diagnosticsPanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -52,6 +54,7 @@ class App {
         this.contextMeter = createContextMeter();
         this.workspaceModeSwitcher = createWorkspaceModeSwitcher('workspace-mode-container');
         this.settingsPanel = createSettingsPanel();
+        this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
         this.setupGlobalEvents();
@@ -121,10 +124,19 @@ class App {
             toast.error('Failed to migrate data to IndexedDB. Some data may be unavailable.');
         });
 
+        // Diagnostics panel
+        document.getElementById('diagnostics-btn')?.addEventListener('click', () => {
+            this.diagnosticsPanel?.open();
+        });
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             // Escape to stop generation or close mobile sidebar
             if (e.key === 'Escape') {
+                if (this.diagnosticsPanel?.isOpen()) {
+                    this.diagnosticsPanel.close();
+                    return;
+                }
                 if (this.closeMobileSidebar()) return;
                 const stopBtn = document.getElementById('stop-btn');
                 if (stopBtn && !stopBtn.classList.contains('hidden')) {
