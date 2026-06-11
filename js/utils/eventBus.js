@@ -135,6 +135,12 @@ export const Events = {
     WEB_SEARCH_TOGGLED: 'tool:webSearchToggled',
     TOOLS_CAPABILITY_CHANGED: 'tool:capabilityChanged',
 
+    // MCP events
+    MCP_SERVERS_CHANGED: 'mcp:serversChanged',
+    MCP_DISCOVERY_STARTED: 'mcp:discoveryStarted',
+    MCP_DISCOVERY_FINISHED: 'mcp:discoveryFinished',
+    MCP_DISCOVERY_FAILED: 'mcp:discoveryFailed',
+
     // Agent run events
     AGENT_RUN_CREATED: 'agentRun:created',
     AGENT_RUN_UPDATED: 'agentRun:updated',

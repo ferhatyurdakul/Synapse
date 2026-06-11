@@ -23,11 +23,13 @@ import json
 import time
 import threading
 import subprocess
+import shlex
 from datetime import datetime, timezone
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 BRAVE_API_BASE = "https://api.search.brave.com"
 TAVILY_API_BASE = "https://api.tavily.com"
+MCP_TIMEOUT_SECONDS = 10
 
 # ── Backend Tool Runner ────────────────────────────────────────────────────────
 
@@ -392,6 +394,105 @@ def run_backend_tool(tool_name, args):
         _tool_semaphore.release()
 
 
+# ── MCP discovery helpers ─────────────────────────────────────────────────────
+
+def _json_rpc(method, params=None, request_id=1):
+    return {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}
+
+
+def _mcp_extract_tools(payload):
+    if not isinstance(payload, dict):
+        return []
+    result = payload.get("result", payload)
+    tools = result.get("tools") if isinstance(result, dict) else []
+    clean = []
+    for tool in tools or []:
+        if not isinstance(tool, dict):
+            continue
+        clean.append({
+            "name": tool.get("name", "unknown"),
+            "description": tool.get("description", ""),
+            "inputSchema": tool.get("inputSchema") or tool.get("parameters") or {"type": "object", "properties": {}},
+        })
+    return clean
+
+
+def _mcp_discover_http(server):
+    url = server.get("url")
+    if not url:
+        raise ValueError("HTTP MCP server requires a url")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    headers.update(server.get("headers") or {})
+    token = server.get("token")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    init_body = json.dumps(_json_rpc("initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "Synapse", "version": "1.0"},
+    }, 1)).encode()
+    try:
+        req = urllib.request.Request(url, data=init_body, headers=headers, method="POST")
+        urllib.request.urlopen(req, timeout=MCP_TIMEOUT_SECONDS).read()
+    except Exception:
+        pass
+
+    body = json.dumps(_json_rpc("tools/list", {}, 2)).encode()
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=MCP_TIMEOUT_SECONDS) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    return _mcp_extract_tools(payload)
+
+
+def _mcp_discover_stdio(server):
+    command = server.get("command") or ""
+    if not command:
+        raise ValueError("stdio MCP server requires a command")
+    proc = subprocess.Popen(
+        shlex.split(command),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=WORKSPACE_ROOT,
+    )
+    requests = [
+        _json_rpc("initialize", {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "Synapse", "version": "1.0"},
+        }, 1),
+        _json_rpc("tools/list", {}, 2),
+    ]
+    stdin = "".join(json.dumps(item) + "\n" for item in requests)
+    try:
+        stdout, stderr = proc.communicate(stdin, timeout=MCP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+        raise TimeoutError(f"MCP stdio discovery timed out: {stderr[:400]}")
+    if proc.returncode not in (0, None) and not stdout.strip():
+        raise RuntimeError(stderr.strip() or f"MCP command exited with {proc.returncode}")
+    tools = []
+    for line in stdout.splitlines():
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        tools = _mcp_extract_tools(payload) or tools
+    return tools
+
+
+def discover_mcp_tools(server):
+    transport = server.get("transport", "http")
+    if transport == "stdio":
+        return _mcp_discover_stdio(server)
+    if transport == "http":
+        return _mcp_discover_http(server)
+    raise ValueError(f"Unsupported MCP transport: {transport}")
+
+
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         # Prevent caching for JS/CSS so changes are picked up immediately
@@ -414,6 +515,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._proxy_tavily()
         elif self.path == "/api/tools/run":
             self._handle_tools_run()
+        elif self.path == "/api/mcp/discover":
+            self._handle_mcp_discover()
         else:
             self.send_response(405)
             self._cors_headers()
@@ -422,7 +525,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         if (self.path.startswith("/api/brave/")
                 or self.path.startswith("/api/tavily/")
-                or self.path.startswith("/api/tools/")):
+                or self.path.startswith("/api/tools/")
+                or self.path.startswith("/api/mcp/")):
             self.send_response(204)
             self._cors_headers()
             self.end_headers()
@@ -561,6 +665,27 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         response = run_backend_tool(tool_name, args)
         status = 200 if response.get("ok") else 422
+
+        body = json.dumps(response, default=str).encode()
+        self.send_response(status)
+        self._cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_mcp_discover(self):
+        """POST /api/mcp/discover — discover tools from an MCP server config."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            payload = json.loads(raw)
+            server = payload.get("server") or {}
+            tools = discover_mcp_tools(server)
+            response = {"ok": True, "tools": tools, "count": len(tools)}
+            status = 200
+        except Exception as e:
+            response = {"ok": False, "error": str(e), "tools": []}
+            status = 422
 
         body = json.dumps(response, default=str).encode()
         self.send_response(status)

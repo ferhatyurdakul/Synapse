@@ -9,11 +9,13 @@ import { createChatView } from './components/chatView.js';
 import { createInputArea } from './components/inputArea.js';
 import { createSettingsPanel } from './components/settingsPanel.js';
 import { createDiagnosticsPanel } from './components/diagnosticsPanel.js';
+import { createMCPRegistryPanel } from './components/mcpRegistryPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
 import { chatService } from './services/chatService.js';
 import { agentRunService } from './services/agentRunService.js';
+import { mcpService } from './services/mcpService.js';
 import { providerManager } from './services/providerManager.js';
 import { eventBus, Events } from './utils/eventBus.js';
 import { toast } from './components/toast.js';
@@ -42,6 +44,7 @@ class App {
         themeService.applyTheme();
         await chatService.load();
         await agentRunService.load();
+        await mcpService.load();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();
@@ -54,6 +57,7 @@ class App {
         this.contextMeter = createContextMeter();
         this.workspaceModeSwitcher = createWorkspaceModeSwitcher('workspace-mode-container');
         this.settingsPanel = createSettingsPanel();
+        this.mcpRegistryPanel = createMCPRegistryPanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners

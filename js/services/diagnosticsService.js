@@ -17,6 +17,7 @@ import { ollamaService } from './ollamaService.js';
 import { lmStudioService } from './lmStudioService.js';
 import { storageService } from './storageService.js';
 import { backendToolService } from './backendToolService.js';
+import { mcpService } from './mcpService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 
 // ── Status constants ──────────────────────────────────────────────────────
@@ -42,6 +43,8 @@ const RECOVERY = Object.freeze({
     search_api_key_missing: 'Add the required API key in Settings → Tools.',
     backend_tools_down:     'The backend server (server.py) is not reachable. Start it: python3 server.py.',
     backend_tools_error:    'Backend tool execution failed. Check the server console for details.',
+    mcp_not_configured:     'Add an MCP server in Settings → Tools → MCP Servers.',
+    mcp_discovery_failed:   'Check the MCP endpoint/command, auth token, and schema compatibility, then run Discover again.',
 });
 
 // ── Domain definitions ────────────────────────────────────────────────────
@@ -448,6 +451,38 @@ class DiagnosticsService {
             // Non-critical — backend tools check covers this
         }
 
+        // MCP server registry / discovery state
+        try {
+            const servers = mcpService.listServers();
+            const enabled = servers.filter(server => server.enabled);
+            if (servers.length === 0) {
+                checks.push({
+                    name: 'MCP Servers',
+                    status: HealthStatus.UNKNOWN,
+                    detail: 'No MCP servers configured',
+                    recoveryKey: 'mcp_not_configured',
+                });
+            } else {
+                const failed = enabled.filter(server => server.lastStatus === 'error');
+                const toolCount = enabled.reduce((sum, server) => sum + (server.tools?.length || 0), 0);
+                checks.push({
+                    name: 'MCP Servers',
+                    status: failed.length > 0 ? HealthStatus.DEGRADED : HealthStatus.HEALTHY,
+                    detail: `${enabled.length}/${servers.length} enabled, ${toolCount} discovered tool(s)`,
+                    recoveryKey: failed.length > 0 ? 'mcp_discovery_failed' : null,
+                });
+                if (failed.length > 0 && overallStatus !== HealthStatus.OFFLINE) {
+                    overallStatus = HealthStatus.DEGRADED;
+                    lastError = failed[0].lastError || 'MCP discovery failed';
+                }
+                if (overallStatus === HealthStatus.UNKNOWN) overallStatus = HealthStatus.HEALTHY;
+            }
+        } catch (e) {
+            checks.push({ name: 'MCP Servers', status: HealthStatus.DEGRADED, detail: _sanitize(e.message), recoveryKey: 'mcp_discovery_failed' });
+            if (overallStatus !== HealthStatus.OFFLINE) overallStatus = HealthStatus.DEGRADED;
+            if (!lastError) lastError = _sanitize(e.message);
+        }
+
         if (!anyConfigured) {
             checks.unshift({
                 name: 'Web Search',
@@ -508,6 +543,7 @@ class DiagnosticsService {
         const errorEvents = [
             Events.STREAM_ERROR,
             Events.RAG_EMBEDDING_ERROR,
+            Events.MCP_DISCOVERY_FAILED,
         ];
         for (const evt of errorEvents) {
             eventBus.on(evt, (data) => {

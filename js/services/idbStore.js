@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -102,6 +102,15 @@ const STORES = {
         indexes: [
             { name: 'collectionId', keyPath: 'collectionId' },
             { name: 'documentId', keyPath: 'documentId' }
+        ]
+    },
+
+    // ── MCP stores (v6) ──────────────────────────────────────────────────
+    mcpServers: {
+        version: 6,
+        keyPath: 'id',
+        indexes: [
+            { name: 'updatedAt', keyPath: 'updatedAt' }
         ]
     }
 };
