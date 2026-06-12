@@ -108,6 +108,10 @@ function summarizeTimelineEvent(event) {
         case 'step-updated':
             return `Step updated: ${payload.title || 'Untitled step'} (${STEP_STATUS_LABELS[payload.status] || payload.status || 'pending'})`;
         case 'tool-call-recorded':
+            if (payload.toolCall?.provider === 'mcp') {
+                const server = payload.toolCall?.serverName || 'MCP server';
+                return `MCP tool: ${server} / ${payload.toolCall?.toolName || 'unknown-tool'}`;
+            }
             return `Tool call: ${payload.toolCall?.toolName || 'unknown-tool'}`;
         case 'output-appended':
             return 'Run output updated';
@@ -777,6 +781,8 @@ class ChatView {
             abortController
         };
         this.activeStreams.set(streamChatId, streamState);
+        let agentRunId = null;
+        let agentStepId = null;
 
         try {
             // Get model parameters from settings (per-model)
@@ -821,12 +827,30 @@ class ChatView {
             const settings = storageService.loadSettings();
             if (settings.toolsEnabled !== false) enabledCategories.push('builtin');
             if (chat.mode === 'agent') enabledCategories.push('backend');
+            if (settings.toolsEnabled !== false) enabledCategories.push('mcp');
             if (this.webSearchEnabled) enabledCategories.push('web_search');
             const tools = enabledCategories.length > 0
                 ? toolRegistry.getSchemas({ categories: enabledCategories })
                 : [];
             const MAX_TOOL_ITERATIONS = 5;
             let finalResult = null;
+
+            if (chat.mode === 'agent') {
+                const lastUserMsg = [...chat.messages].reverse().find(message => message.role === 'user');
+                const run = await agentRunService.createRun({
+                    chatId: streamChatId,
+                    title: 'Agent response',
+                    objective: lastUserMsg?.content || 'Respond to the user',
+                    status: 'running'
+                });
+                agentRunId = run.id;
+                const step = await agentRunService.addStep(agentRunId, {
+                    title: 'Model tool loop',
+                    status: 'running'
+                });
+                agentStepId = step.id;
+                this.renderAgentRuns(chatService.getChat(streamChatId));
+            }
 
             for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
                 // Reset content for subsequent iterations, keep thinking block
@@ -943,10 +967,31 @@ class ChatView {
                     }
 
                     let toolResult;
+                    let toolStatus = 'completed';
+                    let toolError = null;
+                    const toolDef = toolRegistry.get(name);
+                    const toolStartedAt = new Date().toISOString();
                     try {
                         toolResult = await toolRegistry.execute(name, args);
                     } catch (err) {
+                        toolStatus = 'failed';
+                        toolError = err.message || String(err);
                         toolResult = `Error: ${err.message}`;
+                    }
+
+                    if (agentRunId && agentStepId) {
+                        await agentRunService.addToolCall(agentRunId, agentStepId, {
+                            toolName: toolDef?.mcp?.toolName || name,
+                            provider: toolDef?.category === 'mcp' ? 'mcp' : (toolDef?.category || 'builtin'),
+                            serverName: toolDef?.mcp?.serverName || null,
+                            registryName: name,
+                            input: args,
+                            output: toolStatus === 'completed' ? toolResult : null,
+                            status: toolStatus,
+                            error: toolError,
+                            startedAt: toolStartedAt,
+                            finishedAt: new Date().toISOString()
+                        });
                     }
 
                     const toolInput = formatJsonPreview(args) || '{}';
@@ -1037,6 +1082,18 @@ class ChatView {
                 }
             }
 
+            if (agentRunId && agentStepId) {
+                await agentRunService.updateStep(agentRunId, agentStepId, {
+                    status: 'completed',
+                    output: 'Model response completed.',
+                    finishedAt: new Date().toISOString()
+                });
+                await agentRunService.setRunStatus(agentRunId, 'completed', {
+                    summary: streamState.fullContent.slice(0, 240),
+                    finishedAt: new Date().toISOString()
+                });
+            }
+
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('Stream aborted for chat:', streamChatId);
@@ -1059,6 +1116,16 @@ class ChatView {
                     refreshIcons();
                 }
                 eventBus.emit(Events.STREAM_ERROR, { error, chatId: streamChatId });
+            }
+            if (agentRunId) {
+                if (agentStepId) {
+                    await agentRunService.updateStep(agentRunId, agentStepId, {
+                        status: 'failed',
+                        error: error.message || String(error),
+                        finishedAt: new Date().toISOString()
+                    });
+                }
+                await agentRunService.recordError(agentRunId, error);
             }
         }
 

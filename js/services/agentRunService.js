@@ -51,6 +51,9 @@ function normalizeToolCall(toolCall = {}, timestamp = now()) {
     return {
         id: toolCall.id || generateId(),
         toolName: toolCall.toolName || toolCall.name || 'unknown-tool',
+        provider: toolCall.provider || 'builtin',
+        serverName: toolCall.serverName || null,
+        registryName: toolCall.registryName || null,
         input: cloneValue(toolCall.input) ?? null,
         output: cloneValue(toolCall.output) ?? null,
         status: normalizeToolStatus(toolCall.status),

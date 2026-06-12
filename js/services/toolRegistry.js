@@ -27,6 +27,16 @@ class ToolRegistry {
         this._tools.set(tool.name, tool);
     }
 
+    /**
+     * Remove registered tools that match a predicate.
+     * @param {(tool: Object) => boolean} predicate
+     */
+    unregisterWhere(predicate) {
+        for (const [name, tool] of this._tools.entries()) {
+            if (predicate(tool)) this._tools.delete(name);
+        }
+    }
+
     /** @param {string} name */
     get(name) {
         return this._tools.get(name);

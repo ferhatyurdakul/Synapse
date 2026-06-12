@@ -1,11 +1,12 @@
 /**
- * MCPService — persisted MCP server registry + discovery client.
+ * MCPService — persisted MCP server registry + discovery/client bridge.
  *
  * This browser service stores non-secret server metadata in IndexedDB and asks
- * the Synapse Python dev server to perform MCP discovery. Secrets are accepted
- * only as transient form input and are intentionally not persisted.
+ * the Synapse Python dev server to perform MCP discovery/calls. Secrets are
+ * accepted only as transient form input and are intentionally not persisted.
  */
 import { putRecord, getAllRecords, getRecord, deleteRecord } from './idbStore.js';
+import { toolRegistry } from './toolRegistry.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 
 const STORE = 'mcpServers';
@@ -32,6 +33,20 @@ function stripSecrets(headers = {}) {
         safe[key] = value;
     }
     return safe;
+}
+
+function toToolRegistryName(server, tool) {
+    const safeServer = String(server.name || server.id || 'server')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 28) || 'server';
+    const safeTool = String(tool.name || 'tool')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 32) || 'tool';
+    return `mcp_${safeServer}_${safeTool}`.slice(0, 64);
 }
 
 function normalizeServer(input = {}) {
@@ -65,6 +80,15 @@ function toolNeedsConfirmation(server, tool) {
     return /write|delete|remove|shell|command|exec|file|secret|token|credential/.test(text);
 }
 
+function formatToolResult(value) {
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return String(value);
+    }
+}
+
 class MCPService {
     constructor() {
         this.servers = [];
@@ -73,6 +97,7 @@ class MCPService {
     async load() {
         this.servers = (await getAllRecords(STORE)).map(normalizeServer)
             .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+        this.registerDiscoveredTools();
         return this.listServers();
     }
 
@@ -141,6 +166,7 @@ class MCPService {
                 lastDiscoveredAt: now()
             });
             eventBus.emit(Events.MCP_DISCOVERY_FINISHED, { serverId, tools });
+            this.registerDiscoveredTools();
             return updated;
         } catch (error) {
             const updated = await this.saveServer({
@@ -161,8 +187,78 @@ class MCPService {
                 serverName: server.name,
                 trustState: server.trustState,
                 scope: server.scope,
+                registryName: toToolRegistryName(server, tool),
                 ...tool
             })));
+    }
+
+    registerDiscoveredTools() {
+        toolRegistry.unregisterWhere(tool => tool.category === 'mcp');
+        for (const server of this.servers.filter(entry => entry.enabled)) {
+            for (const tool of server.tools || []) {
+                const registryName = toToolRegistryName(server, tool);
+                toolRegistry.register({
+                    name: registryName,
+                    description: `[MCP: ${server.name}] ${tool.description || tool.name || 'MCP tool'}`,
+                    category: 'mcp',
+                    parameters: tool.inputSchema || { type: 'object', properties: {} },
+                    mcp: {
+                        serverId: server.id,
+                        serverName: server.name,
+                        toolName: tool.name,
+                        requiresConfirmation: tool.requiresConfirmation !== false,
+                        trustState: server.trustState
+                    },
+                    handler: async (args = {}) => this.callTool(server.id, tool.name, args, { registryName })
+                });
+            }
+        }
+    }
+
+    async callTool(serverId, toolName, args = {}, options = {}) {
+        const server = this.servers.find(entry => entry.id === serverId);
+        if (!server) throw new Error('MCP server not found');
+        if (!server.enabled) throw new Error(`MCP server "${server.name}" is disabled`);
+
+        const metadata = {
+            serverId: server.id,
+            serverName: server.name,
+            toolName,
+            registryName: options.registryName || toolName,
+            trustState: server.trustState,
+            startedAt: now()
+        };
+        eventBus.emit(Events.MCP_TOOL_CALL_STARTED, { ...metadata, input: args });
+
+        try {
+            const response = await fetch('/api/mcp/call', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ server, tool: toolName, args })
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok || data?.ok === false) {
+                throw new Error(data?.error || `MCP tool call failed (${response.status})`);
+            }
+            const result = formatToolResult(data.result ?? data);
+            eventBus.emit(Events.MCP_TOOL_CALL_COMPLETED, {
+                ...metadata,
+                input: args,
+                output: data.result ?? data,
+                status: 'completed',
+                finishedAt: now()
+            });
+            return result;
+        } catch (error) {
+            eventBus.emit(Events.MCP_TOOL_CALL_COMPLETED, {
+                ...metadata,
+                input: args,
+                error: error.message || String(error),
+                status: 'failed',
+                finishedAt: now()
+            });
+            throw error;
+        }
     }
 }
 

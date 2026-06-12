@@ -140,6 +140,8 @@ export const Events = {
     MCP_DISCOVERY_STARTED: 'mcp:discoveryStarted',
     MCP_DISCOVERY_FINISHED: 'mcp:discoveryFinished',
     MCP_DISCOVERY_FAILED: 'mcp:discoveryFailed',
+    MCP_TOOL_CALL_STARTED: 'mcp:toolCallStarted',
+    MCP_TOOL_CALL_COMPLETED: 'mcp:toolCallCompleted',
 
     // Agent run events
     AGENT_RUN_CREATED: 'agentRun:created',

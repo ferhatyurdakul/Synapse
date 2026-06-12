@@ -445,6 +445,40 @@ def _mcp_discover_http(server):
     return _mcp_extract_tools(payload)
 
 
+def _mcp_call_http(server, tool_name, arguments):
+    url = server.get("url")
+    if not url:
+        raise ValueError("HTTP MCP server requires a url")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    headers.update(server.get("headers") or {})
+    token = server.get("token")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    init_body = json.dumps(_json_rpc("initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "Synapse", "version": "1.0"},
+    }, 1)).encode()
+    try:
+        req = urllib.request.Request(url, data=init_body, headers=headers, method="POST")
+        urllib.request.urlopen(req, timeout=MCP_TIMEOUT_SECONDS).read()
+    except Exception:
+        pass
+
+    body = json.dumps(_json_rpc("tools/call", {
+        "name": tool_name,
+        "arguments": arguments or {},
+    }, 3)).encode()
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=MCP_TIMEOUT_SECONDS) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    if isinstance(payload, dict) and payload.get("error"):
+        error = payload["error"]
+        raise RuntimeError(error.get("message") if isinstance(error, dict) else str(error))
+    return payload.get("result", payload) if isinstance(payload, dict) else payload
+
+
 def _mcp_discover_stdio(server):
     command = server.get("command") or ""
     if not command:
@@ -484,12 +518,69 @@ def _mcp_discover_stdio(server):
     return tools
 
 
+def _mcp_call_stdio(server, tool_name, arguments):
+    command = server.get("command") or ""
+    if not command:
+        raise ValueError("stdio MCP server requires a command")
+    command_parts = shlex.split(command) + list(server.get("args") or [])
+    proc = subprocess.Popen(
+        command_parts,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=WORKSPACE_ROOT,
+    )
+    requests = [
+        _json_rpc("initialize", {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "Synapse", "version": "1.0"},
+        }, 1),
+        _json_rpc("tools/call", {"name": tool_name, "arguments": arguments or {}}, 2),
+    ]
+    stdin = "".join(json.dumps(item) + "\n" for item in requests)
+    try:
+        stdout, stderr = proc.communicate(stdin, timeout=MCP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+        raise TimeoutError(f"MCP stdio tool call timed out: {stderr[:400]}")
+    if proc.returncode not in (0, None) and not stdout.strip():
+        raise RuntimeError(stderr.strip() or f"MCP command exited with {proc.returncode}")
+    result = None
+    for line in stdout.splitlines():
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("id") == 2:
+            if payload.get("error"):
+                error = payload["error"]
+                raise RuntimeError(error.get("message") if isinstance(error, dict) else str(error))
+            result = payload.get("result", payload)
+    if result is None:
+        raise RuntimeError(stderr.strip() or "MCP stdio tool call produced no result")
+    return result
+
+
 def discover_mcp_tools(server):
     transport = server.get("transport", "http")
     if transport == "stdio":
         return _mcp_discover_stdio(server)
     if transport == "http":
         return _mcp_discover_http(server)
+    raise ValueError(f"Unsupported MCP transport: {transport}")
+
+
+def call_mcp_tool(server, tool_name, arguments):
+    if not tool_name or not isinstance(tool_name, str):
+        raise ValueError("MCP tool name is required")
+    transport = server.get("transport", "http")
+    if transport == "stdio":
+        return _mcp_call_stdio(server, tool_name, arguments)
+    if transport == "http":
+        return _mcp_call_http(server, tool_name, arguments)
     raise ValueError(f"Unsupported MCP transport: {transport}")
 
 
@@ -517,6 +608,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_tools_run()
         elif self.path == "/api/mcp/discover":
             self._handle_mcp_discover()
+        elif self.path == "/api/mcp/call":
+            self._handle_mcp_call()
         else:
             self.send_response(405)
             self._cors_headers()
@@ -685,6 +778,29 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             status = 200
         except Exception as e:
             response = {"ok": False, "error": str(e), "tools": []}
+            status = 422
+
+        body = json.dumps(response, default=str).encode()
+        self.send_response(status)
+        self._cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_mcp_call(self):
+        """POST /api/mcp/call — execute a tool on a configured MCP server."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            payload = json.loads(raw)
+            server = payload.get("server") or {}
+            tool_name = payload.get("tool")
+            arguments = payload.get("args") or {}
+            result = call_mcp_tool(server, tool_name, arguments)
+            response = {"ok": True, "tool": tool_name, "result": result}
+            status = 200
+        except Exception as e:
+            response = {"ok": False, "error": str(e)}
             status = 422
 
         body = json.dumps(response, default=str).encode()
