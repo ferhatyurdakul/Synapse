@@ -10,12 +10,14 @@ import { createInputArea } from './components/inputArea.js';
 import { createSettingsPanel } from './components/settingsPanel.js';
 import { createDiagnosticsPanel } from './components/diagnosticsPanel.js';
 import { createMCPRegistryPanel } from './components/mcpRegistryPanel.js';
+import { createMemoryPanel } from './components/memoryPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
 import { chatService } from './services/chatService.js';
 import { agentRunService } from './services/agentRunService.js';
 import { mcpService } from './services/mcpService.js';
+import { memoryService } from './services/memoryService.js';
 import { providerManager } from './services/providerManager.js';
 import { eventBus, Events } from './utils/eventBus.js';
 import { toast } from './components/toast.js';
@@ -31,6 +33,7 @@ class App {
         this.chatView = null;
         this.inputArea = null;
         this.diagnosticsPanel = null;
+        this.memoryPanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -45,6 +48,7 @@ class App {
         await chatService.load();
         await agentRunService.load();
         await mcpService.load();
+        await memoryService.init();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();
@@ -58,6 +62,7 @@ class App {
         this.workspaceModeSwitcher = createWorkspaceModeSwitcher('workspace-mode-container');
         this.settingsPanel = createSettingsPanel();
         this.mcpRegistryPanel = createMCPRegistryPanel();
+        this.memoryPanel = createMemoryPanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -133,10 +138,19 @@ class App {
             this.diagnosticsPanel?.open();
         });
 
+        // Memory panel
+        document.getElementById('memory-btn')?.addEventListener('click', () => {
+            this.memoryPanel?.open();
+        });
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             // Escape to stop generation or close mobile sidebar
             if (e.key === 'Escape') {
+                if (this.memoryPanel?.isOpen) {
+                    this.memoryPanel.close();
+                    return;
+                }
                 if (this.diagnosticsPanel?.isOpen()) {
                     this.diagnosticsPanel.close();
                     return;

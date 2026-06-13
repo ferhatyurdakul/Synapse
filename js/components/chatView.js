@@ -9,6 +9,7 @@ import { providerManager } from '../services/providerManager.js';
 import { titleService } from '../services/titleService.js';
 import { toolRegistry } from '../services/toolRegistry.js';
 import { ragService } from '../services/ragService.js';
+import { memoryService } from '../services/memoryService.js';
 import { agentRunService } from '../services/agentRunService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { getSessionModeConfig } from '../config/sessionModes.js';
@@ -812,6 +813,22 @@ class ChatView {
                     } catch (err) {
                         console.warn('[RAG] Search failed, continuing without context:', err);
                     }
+                }
+            }
+
+            // ── Semantic Memory: auto-inject relevant memories ────────────
+            const lastUserMsgForMemory = [...chat.messages].reverse().find(m => m.role === 'user');
+            if (lastUserMsgForMemory) {
+                try {
+                    const memoryContext = await memoryService.retrieveContext(
+                        lastUserMsgForMemory.content,
+                        chat.mode || 'chat'
+                    );
+                    if (memoryContext) {
+                        systemPrompt = memoryContext + '\n\n' + (systemPrompt || '');
+                    }
+                } catch (err) {
+                    console.warn('[Memory] Retrieval failed, continuing without memory:', err);
                 }
             }
 

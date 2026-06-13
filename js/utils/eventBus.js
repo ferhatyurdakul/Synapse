@@ -157,5 +157,14 @@ export const Events = {
     RAG_EMBEDDING_PROGRESS: 'rag:embeddingProgress',
     RAG_EMBEDDING_COMPLETE: 'rag:embeddingComplete',
     RAG_EMBEDDING_ERROR: 'rag:embeddingError',
-    RAG_SEARCH_EXECUTED: 'rag:searchExecuted'
+    RAG_SEARCH_EXECUTED: 'rag:searchExecuted',
+
+    // Semantic Memory events
+    MEMORY_STORED: 'memory:stored',
+    MEMORY_DELETED: 'memory:deleted',
+    MEMORY_UPDATED: 'memory:updated',
+    MEMORY_SEARCHED: 'memory:searched',
+    MEMORY_IMPORTED: 'memory:imported',
+    MEMORY_EXPORTED: 'memory:exported',
+    MEMORY_COMPACTED: 'memory:compacted'
 };

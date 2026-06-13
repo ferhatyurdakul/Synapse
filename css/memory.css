@@ -1,0 +1,335 @@
+/**
+ * Memory Panel — styles for the Semantic Memory browser/editor modal.
+ * Self-contained; does not depend on styles.css or modern.css.
+ */
+
+/* ── Overlay + Modal Shell ─────────────────────────────────────────────── */
+
+.memory-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+.memory-modal.open {
+    opacity: 1;
+    visibility: visible;
+}
+.memory-modal .mem-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+.memory-modal .mem-panel {
+    position: relative;
+    width: min(720px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary, #1a1a2e);
+    color: var(--text-primary, #e0e0e0);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.mem-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+}
+.mem-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.mem-header-actions {
+    display: flex;
+    gap: 6px;
+}
+.mem-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #999);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.mem-close-btn:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.06));
+    color: var(--text-primary, #e0e0e0);
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────────── */
+
+.mem-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+    flex-wrap: wrap;
+}
+.mem-search-input {
+    flex: 1;
+    min-width: 160px;
+    padding: 7px 12px;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 8px;
+    background: var(--bg-secondary, #16213e);
+    color: var(--text-primary, #e0e0e0);
+    font-size: 0.88rem;
+    outline: none;
+}
+.mem-search-input:focus {
+    border-color: var(--accent-color, #6c63ff);
+}
+.mem-filter-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 20px;
+    background: transparent;
+    color: var(--text-secondary, #999);
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+.mem-filter-btn:hover {
+    border-color: var(--accent-color, #6c63ff);
+    color: var(--text-primary, #e0e0e0);
+}
+.mem-filter-btn.active {
+    background: var(--accent-color, #6c63ff);
+    border-color: var(--accent-color, #6c63ff);
+    color: #fff;
+}
+.mem-action-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary, #999);
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+}
+.mem-action-btn:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.06));
+    color: var(--text-primary, #e0e0e0);
+}
+.mem-action-btn.primary {
+    background: var(--accent-color, #6c63ff);
+    border-color: var(--accent-color, #6c63ff);
+    color: #fff;
+}
+.mem-action-btn.primary:hover {
+    filter: brightness(1.1);
+}
+.mem-action-btn.danger:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* ── Stats bar ─────────────────────────────────────────────────────────── */
+
+.mem-stats-bar {
+    display: flex;
+    gap: 16px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04));
+    font-size: 0.75rem;
+    color: var(--text-secondary, #888);
+}
+.mem-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ── Entry list ────────────────────────────────────────────────────────── */
+
+.mem-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
+}
+.mem-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary, #888);
+}
+.mem-empty-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.mem-entry {
+    border: 1px solid var(--border-color, rgba(255,255,255,0.06));
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+}
+.mem-entry:hover {
+    border-color: var(--border-color, rgba(255,255,255,0.15));
+}
+.mem-entry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.mem-entry-badges {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.mem-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.mem-badge.layer-fact        { background: rgba(52,152,219,0.15); color: #5dade2; }
+.mem-badge.layer-preference  { background: rgba(155,89,182,0.15); color: #bb8fce; }
+.mem-badge.layer-procedure   { background: rgba(46,204,113,0.15); color: #58d68d; }
+.mem-badge.layer-context     { background: rgba(243,156,18,0.15); color: #f5b041; }
+.mem-badge.confidence        { background: rgba(255,255,255,0.06); color: var(--text-secondary, #aaa); }
+.mem-badge.source            { background: rgba(255,255,255,0.04); color: var(--text-secondary, #999); }
+.mem-badge.score             { background: rgba(108,99,255,0.12); color: #a29bfe; }
+
+.mem-entry-actions {
+    display: flex;
+    gap: 4px;
+}
+.mem-icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #777);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    line-height: 1;
+}
+.mem-icon-btn:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.06));
+    color: var(--text-primary, #e0e0e0);
+}
+.mem-icon-btn.delete:hover {
+    color: #e74c3c;
+}
+
+.mem-entry-content {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin-bottom: 8px;
+    word-break: break-word;
+}
+.mem-entry-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.72rem;
+    color: var(--text-secondary, #777);
+    flex-wrap: wrap;
+}
+.mem-entry-tags {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+.mem-tag {
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-secondary, #999);
+}
+
+/* ── Inline edit form ──────────────────────────────────────────────────── */
+
+.mem-edit-form {
+    margin-top: 8px;
+}
+.mem-edit-textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 8px;
+    background: var(--bg-secondary, #16213e);
+    color: var(--text-primary, #e0e0e0);
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+}
+.mem-edit-textarea:focus {
+    border-color: var(--accent-color, #6c63ff);
+}
+.mem-edit-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.mem-edit-row select,
+.mem-edit-row input[type="number"] {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 6px;
+    background: var(--bg-secondary, #16213e);
+    color: var(--text-primary, #e0e0e0);
+    font-size: 0.8rem;
+    outline: none;
+}
+
+/* ── Add form ──────────────────────────────────────────────────────────── */
+
+.mem-add-form {
+    border: 1px dashed var(--border-color, rgba(255,255,255,0.15));
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+.mem-add-form h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────── */
+
+.mem-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border-color, rgba(255,255,255,0.06));
+    font-size: 0.75rem;
+    color: var(--text-secondary, #888);
+}

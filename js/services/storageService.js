@@ -514,6 +514,8 @@ class StorageService {
         await clearStore('attachments');
         await clearStore('agentRuns');
         await clearStore('agentRunEvents');
+        await clearStore('memoryEntries');
+        await clearStore('memoryEmbeddings');
         await clearStore('folders');
         this._foldersCache = {};
     }
@@ -529,6 +531,8 @@ class StorageService {
         await clearStore('agentRuns');
         await clearStore('agentRunEvents');
         await clearStore('mcpServers');
+        await clearStore('memoryEntries');
+        await clearStore('memoryEmbeddings');
         await clearStore('settings');
         await clearStore('folders');
         await clearStore('modelSettings');

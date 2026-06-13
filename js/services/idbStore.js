@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -111,6 +111,29 @@ const STORES = {
         keyPath: 'id',
         indexes: [
             { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+
+    // ── Semantic Memory stores (v7) ───────────────────────────────────────
+    memoryEntries: {
+        version: 7,
+        keyPath: 'id',
+        indexes: [
+            { name: 'layer', keyPath: 'layer' },
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'confidence', keyPath: 'confidence' },
+            { name: 'createdAt', keyPath: 'createdAt' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'sourceType', keyPath: 'source.type' },
+            { name: 'projectId_layer', keyPath: ['projectId', 'layer'] }
+        ]
+    },
+    memoryEmbeddings: {
+        version: 7,
+        keyPath: 'entryId',
+        indexes: [
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'layer', keyPath: 'layer' }
         ]
     }
 };
