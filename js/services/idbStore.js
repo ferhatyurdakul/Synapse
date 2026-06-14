@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -134,6 +134,17 @@ const STORES = {
         indexes: [
             { name: 'projectId', keyPath: 'projectId' },
             { name: 'layer', keyPath: 'layer' }
+        ]
+    },
+
+    // ── Skills and reusable workflows (v8) ───────────────────────────────
+    skills: {
+        version: 8,
+        keyPath: 'id',
+        indexes: [
+            { name: 'name', keyPath: 'name' },
+            { name: 'origin', keyPath: 'origin' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
         ]
     }
 };

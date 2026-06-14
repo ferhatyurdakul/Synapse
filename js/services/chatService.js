@@ -6,6 +6,7 @@
 import { storageService } from './storageService.js';
 import { contextService } from './contextService.js';
 import { providerManager } from './providerManager.js';
+import { skillService } from './skillService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { getSessionModeConfig, normalizeSessionMode } from '../config/sessionModes.js';
 
@@ -170,6 +171,8 @@ class ChatService {
             forkedFromMessageId: null,
             systemPrompt: options.systemPrompt ?? null,
             templateId: options.templateId || null,
+            activeSkillIds: Array.isArray(options.activeSkillIds) ? options.activeSkillIds : [],
+            skillInjectionLog: [],
             createdAt: now,
             updatedAt: now
         };
@@ -366,15 +369,31 @@ class ChatService {
      */
     getSystemPrompt() {
         const chat = this.getCurrentChat();
+        let basePrompt = '';
         if (chat && Object.prototype.hasOwnProperty.call(chat, 'systemPrompt') && chat.systemPrompt !== null) {
-            return chat.systemPrompt || '';
-        }
-        if (chat?.folderId) {
+            basePrompt = chat.systemPrompt || '';
+        } else if (chat?.folderId) {
             const folder = this.getFolder(chat.folderId);
-            if (folder?.systemPrompt) return folder.systemPrompt;
+            basePrompt = folder?.systemPrompt || '';
+        } else {
+            const settings = storageService.loadSettings();
+            basePrompt = settings.systemPrompt || '';
         }
-        const settings = storageService.loadSettings();
-        return settings.systemPrompt || '';
+        return skillService.buildSystemPrompt(basePrompt, chat?.activeSkillIds || []);
+    }
+
+    getActiveSkillSummaries(chatId = this.currentChatId) {
+        return skillService.getInjectionSummary(this.getChat(chatId));
+    }
+
+    updateSkills(chatId, skillIds = []) {
+        if (!chatId || !this.chats[chatId]) return;
+        const activeSkillIds = [...new Set(skillIds)].filter(Boolean);
+        this.chats[chatId].activeSkillIds = activeSkillIds;
+        this.chats[chatId].skillInjectionLog = skillService.getInjectionSummary(this.chats[chatId]);
+        this.chats[chatId].updatedAt = new Date().toISOString();
+        this._persistChat(this.chats[chatId]);
+        eventBus.emit(Events.CHAT_UPDATED, { id: chatId, chat: this.chats[chatId] });
     }
 
     /**

@@ -117,6 +117,8 @@ export const Events = {
     CHATS_IMPORTED: 'chats:imported',
     CHATS_EXPORTED: 'chats:exported',
     TEMPLATES_UPDATED: 'templates:updated',
+    SKILLS_UPDATED: 'skills:updated',
+    SKILLS_IMPORTED: 'skills:imported',
 
     // Settings events
     SETTINGS_UPDATED: 'settings:updated',

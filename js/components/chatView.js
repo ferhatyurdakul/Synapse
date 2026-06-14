@@ -10,6 +10,7 @@ import { titleService } from '../services/titleService.js';
 import { toolRegistry } from '../services/toolRegistry.js';
 import { ragService } from '../services/ragService.js';
 import { memoryService } from '../services/memoryService.js';
+import { skillService } from '../services/skillService.js';
 import { agentRunService } from '../services/agentRunService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { getSessionModeConfig } from '../config/sessionModes.js';
@@ -846,8 +847,9 @@ class ChatView {
             if (chat.mode === 'agent') enabledCategories.push('backend');
             if (settings.toolsEnabled !== false) enabledCategories.push('mcp');
             if (this.webSearchEnabled) enabledCategories.push('web_search');
-            const tools = enabledCategories.length > 0
-                ? toolRegistry.getSchemas({ categories: enabledCategories })
+            const skillAwareCategories = skillService.getToolCategories(chat.activeSkillIds || [], enabledCategories);
+            const tools = skillAwareCategories.length > 0
+                ? toolRegistry.getSchemas({ categories: skillAwareCategories })
                 : [];
             const MAX_TOOL_ITERATIONS = 5;
             let finalResult = null;
