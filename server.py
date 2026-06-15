@@ -24,7 +24,12 @@ import time
 import threading
 import subprocess
 import shlex
+import hashlib
+import hmac
+import secrets
+import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 BRAVE_API_BASE = "https://api.search.brave.com"
@@ -38,6 +43,25 @@ WORKSPACE_ROOT = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 # Audit log path (JSONL, one JSON object per line)
 AUDIT_LOG_PATH = os.path.join(WORKSPACE_ROOT, ".audit", "tool_audit.jsonl")
+INTEGRATION_AUDIT_LOG_PATH = os.path.join(WORKSPACE_ROOT, ".audit", "integration_audit.jsonl")
+
+# Local integration state. Secrets/tokens are generated at runtime and stored outside
+# source-controlled app files by default; operators can back this directory up if needed.
+INTEGRATION_STATE_DIR = os.environ.get(
+    "SYNAPSE_INTEGRATION_STATE_DIR",
+    os.path.join(WORKSPACE_ROOT, ".synapse"),
+)
+INTEGRATION_STATE_PATH = os.path.join(INTEGRATION_STATE_DIR, "integrations.json")
+DEFAULT_TOKEN_SCOPES = ["tools:read", "tools:run", "mcp:discover", "mcp:call", "webhooks:receive", "webhooks:send"]
+INTERNAL_ONLY_ENDPOINTS = ["/api/brave/*", "/api/tavily/*", "/api/integrations/*"]
+INTEGRATION_SCOPE_MAP = {
+    ("GET", "/api/tools/list"): "tools:read",
+    ("POST", "/api/tools/run"): "tools:run",
+    ("POST", "/api/mcp/discover"): "mcp:discover",
+    ("POST", "/api/mcp/call"): "mcp:call",
+    ("POST", "/api/webhooks/inbound"): "webhooks:receive",
+    ("POST", "/api/webhooks/emit"): "webhooks:send",
+}
 
 # Default policy per tool: "allowed" | "ask" | "denied"
 DEFAULT_POLICIES = {
@@ -170,6 +194,150 @@ def _write_audit_log(entry):
     line = json.dumps(entry, default=str) + "\n"
     with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(line)
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _read_json_body(handler):
+    content_length = int(handler.headers.get("Content-Length", 0))
+    raw = handler.rfile.read(content_length) if content_length > 0 else b"{}"
+    if not raw:
+        return {}
+    return json.loads(raw)
+
+
+def _send_json(handler, status, payload):
+    body = json.dumps(payload, default=str).encode()
+    handler.send_response(status)
+    handler._cors_headers()
+    handler.send_header("Content-Type", "application/json")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _integration_audit(event, status="ok", **extra):
+    os.makedirs(os.path.dirname(INTEGRATION_AUDIT_LOG_PATH), exist_ok=True)
+    entry = {"ts": _utc_now(), "event": event, "status": status}
+    entry.update(extra)
+    with open(INTEGRATION_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, default=str) + "\n")
+
+
+def _default_integration_state():
+    return {"tokens": [], "webhooks": [], "inbound_events": [], "outbound_deliveries": []}
+
+
+def _load_integration_state():
+    try:
+        with open(INTEGRATION_STATE_PATH, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        state = _default_integration_state()
+    except json.JSONDecodeError:
+        state = _default_integration_state()
+    for key, default in _default_integration_state().items():
+        state.setdefault(key, default)
+    return state
+
+
+def _save_integration_state(state):
+    os.makedirs(INTEGRATION_STATE_DIR, exist_ok=True)
+    tmp_path = INTEGRATION_STATE_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, sort_keys=True)
+    os.replace(tmp_path, INTEGRATION_STATE_PATH)
+
+
+def _hash_secret(secret):
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+
+def _public_token(token):
+    public = {k: v for k, v in token.items() if k not in ("token_hash",)}
+    return public
+
+
+def _new_token_secret():
+    return "syn_" + secrets.token_urlsafe(32)
+
+
+def _parse_expiry(expires_at):
+    if not expires_at:
+        return None
+    try:
+        return datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("expires_at must be an ISO-8601 timestamp") from exc
+
+
+def _token_is_expired(token):
+    expiry = token.get("expires_at")
+    if not expiry:
+        return False
+    parsed = _parse_expiry(expiry)
+    return parsed is not None and parsed <= datetime.now(timezone.utc)
+
+
+def _token_has_scope(token, required_scope):
+    scopes = token.get("scopes") or []
+    return "*" in scopes or required_scope in scopes
+
+
+def _authenticate_integration_request(headers, required_scope):
+    auth = headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None, "Missing Bearer token"
+    provided = auth[len("Bearer "):].strip()
+    if not provided:
+        return None, "Missing Bearer token"
+    provided_hash = _hash_secret(provided)
+    state = _load_integration_state()
+    for token in state.get("tokens", []):
+        if not hmac.compare_digest(token.get("token_hash", ""), provided_hash):
+            continue
+        if token.get("revoked_at"):
+            return None, "Token revoked"
+        if _token_is_expired(token):
+            return None, "Token expired"
+        if required_scope and not _token_has_scope(token, required_scope):
+            return None, f"Token missing scope: {required_scope}"
+        token["last_used_at"] = _utc_now()
+        _save_integration_state(state)
+        return token, None
+    return None, "Invalid token"
+
+
+def _verify_webhook_signature(raw_body, secret, signature_header):
+    if not secret:
+        return False
+    if not signature_header:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    candidates = [signature_header]
+    if signature_header.startswith("sha256="):
+        candidates.append(signature_header.split("=", 1)[1])
+    return any(hmac.compare_digest(expected, candidate) for candidate in candidates)
+
+
+def _safe_webhook_url(url):
+    parsed = urlparse(url)
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def _deliver_outbound_webhook(webhook, event, payload):
+    body = json.dumps({"event": event, "payload": payload, "sent_at": _utc_now()}).encode()
+    signature = hmac.new(webhook["secret"].encode("utf-8"), body, hashlib.sha256).hexdigest()
+    headers = {
+        "Content-Type": "application/json",
+        "X-Synapse-Event": event,
+        "X-Synapse-Signature": f"sha256={signature}",
+    }
+    req = urllib.request.Request(webhook["url"], data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        response_body = resp.read(2048).decode("utf-8", errors="replace")
+        return {"status_code": resp.status, "body_preview": response_body}
 
 
 def _make_response(ok, tool_name, result=None, error=None, **extra):
@@ -596,6 +764,12 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._proxy_brave()
         elif self.path == "/api/tools/list":
             self._handle_tools_list()
+        elif self.path == "/api/integrations/tokens":
+            self._handle_tokens_list()
+        elif self.path == "/api/integrations/webhooks":
+            self._handle_webhooks_list()
+        elif self.path == "/api/integrations/audit":
+            self._handle_integration_audit_tail()
         elif self.path == "/api/health":
             self._handle_health()
         else:
@@ -610,6 +784,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_mcp_discover()
         elif self.path == "/api/mcp/call":
             self._handle_mcp_call()
+        elif self.path == "/api/integrations/tokens":
+            self._handle_token_create()
+        elif self.path.startswith("/api/integrations/tokens/"):
+            self._handle_token_action()
+        elif self.path == "/api/integrations/webhooks":
+            self._handle_webhook_create()
+        elif self.path.startswith("/api/integrations/webhooks/"):
+            self._handle_webhook_action()
+        elif self.path == "/api/webhooks/inbound":
+            self._handle_inbound_webhook()
+        elif self.path == "/api/webhooks/emit":
+            self._handle_webhook_emit()
         else:
             self.send_response(405)
             self._cors_headers()
@@ -619,7 +805,9 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         if (self.path.startswith("/api/brave/")
                 or self.path.startswith("/api/tavily/")
                 or self.path.startswith("/api/tools/")
-                or self.path.startswith("/api/mcp/")):
+                or self.path.startswith("/api/mcp/")
+                or self.path.startswith("/api/integrations/")
+                or self.path.startswith("/api/webhooks/")):
             self.send_response(204)
             self._cors_headers()
             self.end_headers()
@@ -663,8 +851,27 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def _cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Subscription-Token, Accept")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, X-Subscription-Token, Accept, Authorization, X-Synapse-Signature, X-Synapse-Event",
+        )
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+    def _required_scope(self):
+        return INTEGRATION_SCOPE_MAP.get((self.command, self.path))
+
+    def _require_scope(self, scope=None):
+        required = scope if scope is not None else self._required_scope()
+        if not required:
+            return True
+        token, error = _authenticate_integration_request(self.headers, required)
+        if error:
+            _integration_audit("auth", "denied", path=self.path, scope=required, error=error)
+            _send_json(self, 401, {"ok": False, "error": error, "required_scope": required})
+            return False
+        assert token is not None
+        _integration_audit("auth", "ok", path=self.path, scope=required, token_id=token.get("id"))
+        return True
 
     # ── Health & tool endpoints ──────────────────────────────────────────────
 
@@ -675,6 +882,13 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             "server": {"ok": True, "detail": "Running"},
             "tool_runner": {"ok": True, "detail": f"{len(TOOL_SCHEMAS)} tools registered"},
             "audit_log": {"ok": True, "path": AUDIT_LOG_PATH},
+            "integrations": {
+                "ok": True,
+                "detail": "API tokens, scoped external endpoints, inbound webhooks, outbound hooks",
+                "state_path": INTEGRATION_STATE_PATH,
+                "external_scopes": DEFAULT_TOKEN_SCOPES,
+                "internal_only": INTERNAL_ONLY_ENDPOINTS,
+            },
         }
 
         # Check audit log is writable
@@ -714,6 +928,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def _handle_tools_list(self):
         """GET /api/tools/list — return available tools with schemas and policies."""
+        if not self._require_scope():
+            return
         tools = []
         for name, schema in TOOL_SCHEMAS.items():
             tools.append({
@@ -731,10 +947,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def _handle_tools_run(self):
         """POST /api/tools/run — execute a backend tool."""
+        if not self._require_scope():
+            return
         try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            payload = json.loads(raw)
+            payload = _read_json_body(self)
         except (json.JSONDecodeError, ValueError) as e:
             body = json.dumps({"ok": False, "error": f"Invalid JSON: {e}"}).encode()
             self.send_response(400)
@@ -768,10 +984,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def _handle_mcp_discover(self):
         """POST /api/mcp/discover — discover tools from an MCP server config."""
+        if not self._require_scope():
+            return
         try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            payload = json.loads(raw)
+            payload = _read_json_body(self)
             server = payload.get("server") or {}
             tools = discover_mcp_tools(server)
             response = {"ok": True, "tools": tools, "count": len(tools)}
@@ -789,10 +1005,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def _handle_mcp_call(self):
         """POST /api/mcp/call — execute a tool on a configured MCP server."""
+        if not self._require_scope():
+            return
         try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            payload = json.loads(raw)
+            payload = _read_json_body(self)
             server = payload.get("server") or {}
             tool_name = payload.get("tool")
             arguments = payload.get("args") or {}
@@ -809,6 +1025,226 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(body)
+
+    # ── Integration token & webhook endpoints ────────────────────────────────
+
+    def _handle_tokens_list(self):
+        state = _load_integration_state()
+        _send_json(self, 200, {
+            "ok": True,
+            "scopes": DEFAULT_TOKEN_SCOPES,
+            "tokens": [_public_token(token) for token in state.get("tokens", [])],
+        })
+
+    def _handle_token_create(self):
+        try:
+            payload = _read_json_body(self)
+            scopes = payload.get("scopes") or ["tools:read"]
+            if not isinstance(scopes, list) or not all(isinstance(scope, str) for scope in scopes):
+                raise ValueError("scopes must be a list of strings")
+            unknown_scopes = sorted(set(scopes) - set(DEFAULT_TOKEN_SCOPES) - {"*"})
+            if unknown_scopes:
+                raise ValueError(f"Unknown scopes: {', '.join(unknown_scopes)}")
+            expires_at = payload.get("expires_at")
+            _parse_expiry(expires_at)
+            secret = _new_token_secret()
+            now = _utc_now()
+            token = {
+                "id": str(uuid.uuid4()),
+                "name": payload.get("name") or "Synapse API token",
+                "scopes": scopes,
+                "expires_at": expires_at,
+                "created_at": now,
+                "rotated_at": None,
+                "revoked_at": None,
+                "last_used_at": None,
+                "token_prefix": secret[:12],
+                "token_hash": _hash_secret(secret),
+            }
+            state = _load_integration_state()
+            state["tokens"].append(token)
+            _save_integration_state(state)
+            _integration_audit("token.create", token_id=token["id"], scopes=scopes)
+            response = _public_token(token)
+            response["token"] = secret
+            _send_json(self, 201, {"ok": True, "token": response})
+        except (json.JSONDecodeError, ValueError) as e:
+            _send_json(self, 400, {"ok": False, "error": str(e)})
+
+    def _handle_token_action(self):
+        subparts = self.path.strip("/").split("/")
+        if len(subparts) != 5 or subparts[:3] != ["api", "integrations", "tokens"]:
+            _send_json(self, 404, {"ok": False, "error": "Use /api/integrations/tokens/{id}/revoke or /rotate"})
+            return
+        token_id, action = subparts[3], subparts[4]
+        if action not in ("revoke", "rotate"):
+            _send_json(self, 404, {"ok": False, "error": "Use /api/integrations/tokens/{id}/revoke or /rotate"})
+            return
+        state = _load_integration_state()
+        token = next((item for item in state.get("tokens", []) if item.get("id") == token_id), None)
+        if not token:
+            _send_json(self, 404, {"ok": False, "error": "Token not found"})
+            return
+        if action == "revoke":
+            token["revoked_at"] = _utc_now()
+            _save_integration_state(state)
+            _integration_audit("token.revoke", token_id=token_id)
+            _send_json(self, 200, {"ok": True, "token": _public_token(token)})
+            return
+        secret = _new_token_secret()
+        token["token_hash"] = _hash_secret(secret)
+        token["token_prefix"] = secret[:12]
+        token["rotated_at"] = _utc_now()
+        token["revoked_at"] = None
+        _save_integration_state(state)
+        _integration_audit("token.rotate", token_id=token_id)
+        response = _public_token(token)
+        response["token"] = secret
+        _send_json(self, 200, {"ok": True, "token": response})
+
+    def _handle_webhooks_list(self):
+        state = _load_integration_state()
+        webhooks = [{k: v for k, v in hook.items() if k != "secret"} for hook in state.get("webhooks", [])]
+        _send_json(self, 200, {"ok": True, "webhooks": webhooks})
+
+    def _handle_webhook_create(self):
+        try:
+            payload = _read_json_body(self)
+            url = payload.get("url")
+            if not url or not _safe_webhook_url(url):
+                raise ValueError("url must be http(s)")
+            events = payload.get("events") or ["agent_run.completed", "research_report.completed", "task.reminder"]
+            if not isinstance(events, list) or not all(isinstance(event, str) for event in events):
+                raise ValueError("events must be a list of strings")
+            secret = payload.get("secret") or secrets.token_urlsafe(32)
+            webhook = {
+                "id": str(uuid.uuid4()),
+                "name": payload.get("name") or "Synapse outbound webhook",
+                "url": url,
+                "events": events,
+                "secret": secret,
+                "active": bool(payload.get("active", True)),
+                "created_at": _utc_now(),
+                "last_delivery_at": None,
+                "last_status": None,
+            }
+            state = _load_integration_state()
+            state["webhooks"].append(webhook)
+            _save_integration_state(state)
+            _integration_audit("webhook.create", webhook_id=webhook["id"], events=events)
+            response = {k: v for k, v in webhook.items() if k != "secret"}
+            response["secret"] = secret
+            _send_json(self, 201, {"ok": True, "webhook": response})
+        except (json.JSONDecodeError, ValueError) as e:
+            _send_json(self, 400, {"ok": False, "error": str(e)})
+
+    def _handle_webhook_action(self):
+        subparts = self.path.strip("/").split("/")
+        if len(subparts) != 5 or subparts[:3] != ["api", "integrations", "webhooks"]:
+            _send_json(self, 404, {"ok": False, "error": "Use /api/integrations/webhooks/{id}/disable|enable|test"})
+            return
+        webhook_id, action = subparts[3], subparts[4]
+        if action not in ("disable", "enable", "test"):
+            _send_json(self, 404, {"ok": False, "error": "Unknown webhook action"})
+            return
+        state = _load_integration_state()
+        webhook = next((item for item in state.get("webhooks", []) if item.get("id") == webhook_id), None)
+        if not webhook:
+            _send_json(self, 404, {"ok": False, "error": "Webhook not found"})
+            return
+        if action in ("disable", "enable"):
+            webhook["active"] = action == "enable"
+            _save_integration_state(state)
+            _integration_audit(f"webhook.{action}", webhook_id=webhook_id)
+            _send_json(self, 200, {"ok": True, "webhook": {k: v for k, v in webhook.items() if k != "secret"}})
+            return
+        self._emit_webhook_event("synapse.webhook.test", {"webhook_id": webhook_id}, only_id=webhook_id)
+
+    def _handle_inbound_webhook(self):
+        if not self._require_scope():
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            payload = json.loads(raw or b"{}")
+            shared_secret = payload.get("secret") or os.environ.get("SYNAPSE_INBOUND_WEBHOOK_SECRET")
+            if shared_secret and not _verify_webhook_signature(raw, shared_secret, self.headers.get("X-Synapse-Signature", "")):
+                _integration_audit("webhook.inbound", "denied", error="Invalid signature")
+                _send_json(self, 401, {"ok": False, "error": "Invalid webhook signature"})
+                return
+            event = {
+                "id": str(uuid.uuid4()),
+                "event": self.headers.get("X-Synapse-Event") or payload.get("event") or "external.event",
+                "payload": payload.get("payload", payload),
+                "received_at": _utc_now(),
+            }
+            state = _load_integration_state()
+            state["inbound_events"].append(event)
+            state["inbound_events"] = state["inbound_events"][-100:]
+            _save_integration_state(state)
+            _integration_audit("webhook.inbound", event_id=event["id"], event_name=event["event"])
+            _send_json(self, 202, {"ok": True, "event": event})
+        except (json.JSONDecodeError, ValueError) as e:
+            _send_json(self, 400, {"ok": False, "error": str(e)})
+
+    def _handle_webhook_emit(self):
+        if not self._require_scope():
+            return
+        try:
+            payload = _read_json_body(self)
+            event = payload.get("event") or "synapse.event"
+            event_payload = payload.get("payload") or {}
+            self._emit_webhook_event(event, event_payload)
+        except (json.JSONDecodeError, ValueError) as e:
+            _send_json(self, 400, {"ok": False, "error": str(e)})
+
+    def _emit_webhook_event(self, event, payload, only_id=None):
+        state = _load_integration_state()
+        deliveries = []
+        for webhook in state.get("webhooks", []):
+            if only_id:
+                if webhook.get("id") != only_id:
+                    continue
+            elif event not in webhook.get("events", []) and "*" not in webhook.get("events", []):
+                continue
+            if not webhook.get("active", True):
+                continue
+            delivery = {
+                "id": str(uuid.uuid4()),
+                "webhook_id": webhook.get("id"),
+                "event": event,
+                "sent_at": _utc_now(),
+            }
+            try:
+                result = _deliver_outbound_webhook(webhook, event, payload)
+                delivery.update({"ok": True, **result})
+                webhook["last_status"] = result.get("status_code")
+            except Exception as e:
+                delivery.update({"ok": False, "error": str(e)})
+                webhook["last_status"] = "error"
+            webhook["last_delivery_at"] = delivery["sent_at"]
+            deliveries.append(delivery)
+            _integration_audit("webhook.deliver", "ok" if delivery.get("ok") else "error", **delivery)
+        state["outbound_deliveries"].extend(deliveries)
+        state["outbound_deliveries"] = state["outbound_deliveries"][-100:]
+        _save_integration_state(state)
+        status = 200 if any(item.get("ok") for item in deliveries) or not deliveries else 502
+        _send_json(self, status, {"ok": status == 200, "event": event, "deliveries": deliveries})
+
+    def _handle_integration_audit_tail(self):
+        lines = []
+        try:
+            with open(INTEGRATION_AUDIT_LOG_PATH, "r", encoding="utf-8") as f:
+                lines = f.readlines()[-100:]
+        except FileNotFoundError:
+            pass
+        entries = []
+        for line in lines:
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        _send_json(self, 200, {"ok": True, "entries": entries})
 
     def _proxy_tavily(self):
         # Strip /api/tavily prefix and forward to Tavily API

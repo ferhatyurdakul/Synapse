@@ -118,6 +118,31 @@ js/
     markdown.js           Markdown + LaTeX rendering
 ```
 
+## Integration API
+
+`server.py` now includes a local integration layer for automation against selected Synapse backend capabilities. Management endpoints under `/api/integrations/*` are intended for the local operator and create runtime state in `.synapse/integrations.json`; generated secrets are shown only on create/rotate.
+
+External callers use scoped API tokens:
+
+```bash
+# Create a token for the backend tool API
+curl -s -X POST http://localhost:8000/api/integrations/tokens \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"automation","scopes":["tools:read","tools:run"],"expires_at":"2026-12-31T23:59:59+00:00"}'
+
+# Call an externally exposed endpoint with the returned token in Authorization
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8000/api/tools/list
+```
+
+Supported token scopes are `tools:read`, `tools:run`, `mcp:discover`, `mcp:call`, `webhooks:receive`, and `webhooks:send`. Brave/Tavily proxy endpoints and `/api/integrations/*` management endpoints remain internal-only and are not bearer-token automation surfaces.
+
+Webhook support includes:
+
+- `POST /api/webhooks/inbound` — receives signed external events with an API-token Authorization header and `X-Synapse-Signature: sha256=<hmac>`.
+- `POST /api/integrations/webhooks` — registers outbound webhook targets and returns a generated signing secret.
+- `POST /api/webhooks/emit` — emits an event to matching outbound hooks, signing each JSON body with `X-Synapse-Signature`.
+- `GET /api/integrations/audit` — tails local integration audit entries for token use and webhook delivery.
+
 ## Settings
 
 The settings panel has five tabs:
