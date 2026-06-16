@@ -516,6 +516,8 @@ class StorageService {
         await clearStore('agentRunEvents');
         await clearStore('memoryEntries');
         await clearStore('memoryEmbeddings');
+        await clearStore('documents');
+        await clearStore('documentVersions');
         await clearStore('folders');
         this._foldersCache = {};
     }
@@ -533,6 +535,8 @@ class StorageService {
         await clearStore('mcpServers');
         await clearStore('memoryEntries');
         await clearStore('memoryEmbeddings');
+        await clearStore('documents');
+        await clearStore('documentVersions');
         await clearStore('settings');
         await clearStore('folders');
         await clearStore('modelSettings');
@@ -562,6 +566,7 @@ class StorageService {
         const agentRunCount = await countRecords('agentRuns');
         const agentRunEventCount = await countRecords('agentRunEvents');
         const mcpServerCount = await countRecords('mcpServers');
+        const documentCount = await countRecords('documents');
 
         return {
             used: estimate.usage || 0,
@@ -572,7 +577,8 @@ class StorageService {
             attachmentCount,
             agentRunCount,
             agentRunEventCount,
-            mcpServerCount
+            mcpServerCount,
+            documentCount
         };
     }
 

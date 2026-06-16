@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -145,6 +145,27 @@ const STORES = {
             { name: 'name', keyPath: 'name' },
             { name: 'origin', keyPath: 'origin' },
             { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+
+    // ── Document workspace and library (v9) ───────────────────────────────
+    documents: {
+        version: 9,
+        keyPath: 'id',
+        indexes: [
+            { name: 'type', keyPath: 'type' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'origin', keyPath: 'origin' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    documentVersions: {
+        version: 9,
+        keyPath: 'id',
+        indexes: [
+            { name: 'documentId', keyPath: 'documentId' },
+            { name: 'createdAt', keyPath: 'createdAt' }
         ]
     }
 };

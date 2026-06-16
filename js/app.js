@@ -12,6 +12,7 @@ import { createDiagnosticsPanel } from './components/diagnosticsPanel.js';
 import { createMCPRegistryPanel } from './components/mcpRegistryPanel.js';
 import { createMemoryPanel } from './components/memoryPanel.js';
 import { createSkillPanel } from './components/skillPanel.js';
+import { createDocumentWorkspace } from './components/documentWorkspace.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -37,6 +38,7 @@ class App {
         this.diagnosticsPanel = null;
         this.memoryPanel = null;
         this.skillPanel = null;
+        this.documentWorkspace = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -68,6 +70,7 @@ class App {
         this.mcpRegistryPanel = createMCPRegistryPanel();
         this.memoryPanel = createMemoryPanel();
         this.skillPanel = createSkillPanel();
+        this.documentWorkspace = createDocumentWorkspace();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -143,6 +146,11 @@ class App {
             this.diagnosticsPanel?.open();
         });
 
+        // Document workspace
+        document.getElementById('document-workspace-btn')?.addEventListener('click', () => {
+            this.documentWorkspace?.open();
+        });
+
         // Memory panel
         document.getElementById('memory-btn')?.addEventListener('click', () => {
             this.memoryPanel?.open();
@@ -152,6 +160,10 @@ class App {
         document.addEventListener('keydown', (e) => {
             // Escape to stop generation or close mobile sidebar
             if (e.key === 'Escape') {
+                if (this.documentWorkspace?.isOpen) {
+                    this.documentWorkspace.close();
+                    return;
+                }
                 if (this.memoryPanel?.isOpen) {
                     this.memoryPanel.close();
                     return;
