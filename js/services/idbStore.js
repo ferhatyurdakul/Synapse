@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -166,6 +166,23 @@ const STORES = {
         indexes: [
             { name: 'documentId', keyPath: 'documentId' },
             { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+
+    // ── Saved research report library (v10) ────────────────────────────────
+    researchReports: {
+        version: 10,
+        keyPath: 'id',
+        indexes: [
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'topic', keyPath: 'topic' },
+            { name: 'mode', keyPath: 'mode' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'state', keyPath: 'state' },
+            { name: 'createdAt', keyPath: 'createdAt' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'sourceChatId', keyPath: 'sourceChatId' },
+            { name: 'sourceRunId', keyPath: 'sourceRunId' }
         ]
     }
 };
