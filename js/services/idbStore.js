@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -183,6 +183,22 @@ const STORES = {
             { name: 'updatedAt', keyPath: 'updatedAt' },
             { name: 'sourceChatId', keyPath: 'sourceChatId' },
             { name: 'sourceRunId', keyPath: 'sourceRunId' }
+        ]
+    },
+
+    // ── Notes and tasks workspace (v11) ────────────────────────────────────
+    workItems: {
+        version: 11,
+        keyPath: 'id',
+        indexes: [
+            { name: 'type', keyPath: 'type' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'priority', keyPath: 'priority' },
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'listId', keyPath: 'listId' },
+            { name: 'dueAt', keyPath: 'dueAt' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'createdAt', keyPath: 'createdAt' }
         ]
     }
 };

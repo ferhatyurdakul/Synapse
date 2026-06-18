@@ -1,0 +1,283 @@
+.nt-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1120;
+    display: none;
+}
+
+.nt-modal.open {
+    display: block;
+}
+
+.nt-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(4px);
+}
+
+.nt-panel {
+    position: absolute;
+    inset: 4vh 4vw;
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color, #2a2f3a);
+    border-radius: 18px;
+    background: var(--bg-primary, #0e1117);
+    color: var(--text-primary, #f4f6fb);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.nt-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color, #2a2f3a);
+}
+
+.nt-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.nt-header p,
+.nt-card small,
+.nt-empty,
+#nt-selected-count {
+    color: var(--text-secondary, #9aa4b2);
+    font-size: 0.8rem;
+}
+
+.nt-close {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #2a2f3a);
+    background: transparent;
+    color: inherit;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.nt-body {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: minmax(300px, 390px) 1fr;
+}
+
+.nt-sidebar {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    border-right: 1px solid var(--border-color, #2a2f3a);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.nt-capture,
+.nt-toolbar,
+.nt-batch,
+.nt-editor-top,
+.nt-actions,
+.nt-checklist form {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color, #2a2f3a);
+}
+
+.nt-capture input,
+.nt-capture select,
+.nt-toolbar input,
+.nt-toolbar select,
+.nt-meta-grid input,
+.nt-meta-grid select,
+.nt-editor-top input,
+.nt-checklist input,
+.nt-editor textarea {
+    border: 1px solid var(--border-color, #2a2f3a);
+    border-radius: 10px;
+    background: var(--bg-secondary, #151a23);
+    color: inherit;
+    padding: 0.55rem 0.65rem;
+    font: inherit;
+}
+
+.nt-capture input,
+.nt-toolbar input,
+.nt-editor-top input {
+    min-width: 0;
+    flex: 1;
+}
+
+.nt-modal button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border-color, #2a2f3a);
+    border-radius: 10px;
+    background: var(--bg-secondary, #151a23);
+    color: inherit;
+    padding: 0.5rem 0.7rem;
+    cursor: pointer;
+}
+
+.nt-modal button:hover,
+.nt-card.active {
+    border-color: var(--accent-color, #7c5cff);
+}
+
+.nt-primary {
+    background: var(--accent-color, #7c5cff) !important;
+    border-color: var(--accent-color, #7c5cff) !important;
+    color: white !important;
+}
+
+.nt-lanes {
+    overflow: auto;
+    padding: 0.75rem;
+}
+
+.nt-lane {
+    margin-bottom: 1rem;
+}
+
+.nt-lane h3 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary, #9aa4b2);
+}
+
+.nt-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.65rem;
+    margin-bottom: 0.55rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color, #2a2f3a);
+    border-radius: 14px;
+    background: var(--bg-primary, #0e1117);
+    cursor: pointer;
+}
+
+.nt-card div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.nt-card strong,
+.nt-card small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nt-editor,
+.nt-editor-empty {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.nt-editor-empty {
+    display: grid;
+    place-items: center;
+    color: var(--text-secondary, #9aa4b2);
+}
+
+.nt-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    gap: 0.75rem;
+    padding: 0.9rem;
+}
+
+.nt-meta-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    color: var(--text-secondary, #9aa4b2);
+    font-size: 0.8rem;
+}
+
+.nt-meta-grid .nt-agent {
+    flex-direction: row;
+    align-items: center;
+    color: inherit;
+}
+
+.nt-editor textarea {
+    display: block;
+    width: calc(100% - 1.8rem);
+    min-height: 22vh;
+    margin: 0.9rem;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.nt-checklist,
+.nt-sources,
+.nt-suggestion {
+    margin: 0 0.9rem 0.9rem;
+    padding: 0.8rem;
+    border: 1px solid var(--border-color, #2a2f3a);
+    border-radius: 14px;
+}
+
+.nt-checklist h3,
+.nt-sources h3 {
+    margin-top: 0;
+}
+
+.nt-checklist label {
+    display: block;
+    padding: 0.25rem 0;
+}
+
+.nt-suggestion {
+    border-color: rgba(124, 92, 255, 0.45);
+    background: rgba(124, 92, 255, 0.09);
+}
+
+.nt-suggestion pre {
+    white-space: pre-wrap;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    .nt-panel {
+        inset: 1vh 1vw;
+    }
+
+    .nt-body {
+        grid-template-columns: 1fr;
+    }
+
+    .nt-sidebar {
+        max-height: 42vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color, #2a2f3a);
+    }
+
+    .nt-meta-grid {
+        grid-template-columns: 1fr;
+    }
+}
