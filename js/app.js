@@ -15,6 +15,7 @@ import { createSkillPanel } from './components/skillPanel.js';
 import { createDocumentWorkspace } from './components/documentWorkspace.js';
 import { createResearchReportsPanel } from './components/researchReportsPanel.js';
 import { createNotesTasksPanel } from './components/notesTasksPanel.js';
+import { createComparePanel } from './components/comparePanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -43,6 +44,7 @@ class App {
         this.documentWorkspace = null;
         this.researchReportsPanel = null;
         this.notesTasksPanel = null;
+        this.comparePanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -77,6 +79,7 @@ class App {
         this.documentWorkspace = createDocumentWorkspace();
         this.researchReportsPanel = createResearchReportsPanel();
         this.notesTasksPanel = createNotesTasksPanel();
+        this.comparePanel = createComparePanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -167,6 +170,11 @@ class App {
             this.notesTasksPanel?.open();
         });
 
+        // Multi-model compare & committee mode
+        document.getElementById('compare-btn')?.addEventListener('click', () => {
+            this.comparePanel?.open();
+        });
+
         // Memory panel
         document.getElementById('memory-btn')?.addEventListener('click', () => {
             this.memoryPanel?.open();
@@ -186,6 +194,10 @@ class App {
                 }
                 if (this.notesTasksPanel?.isOpen()) {
                     this.notesTasksPanel.close();
+                    return;
+                }
+                if (this.comparePanel?.isOpen()) {
+                    this.comparePanel.close();
                     return;
                 }
                 if (this.memoryPanel?.isOpen) {

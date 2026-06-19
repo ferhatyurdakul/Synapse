@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -197,6 +197,20 @@ const STORES = {
             { name: 'projectId', keyPath: 'projectId' },
             { name: 'listId', keyPath: 'listId' },
             { name: 'dueAt', keyPath: 'dueAt' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+
+    // ── Multi-model compare / committee sessions (v12) ─────────────────────
+    compareSessions: {
+        version: 12,
+        keyPath: 'id',
+        indexes: [
+            { name: 'mode', keyPath: 'mode' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'blind', keyPath: 'blind' },
+            { name: 'projectId', keyPath: 'projectId' },
             { name: 'updatedAt', keyPath: 'updatedAt' },
             { name: 'createdAt', keyPath: 'createdAt' }
         ]
