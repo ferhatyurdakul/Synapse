@@ -60,8 +60,15 @@ class MemoryPanel {
                         <button class="mem-action-btn" id="mem-import-btn" title="Import memories from JSON">
                             <i data-lucide="upload" class="icon"></i> Import
                         </button>
+                        <button class="mem-action-btn danger" id="mem-clear-btn" title="Delete ALL memories (cannot be undone)">
+                            <i data-lucide="trash-2" class="icon"></i> Clear All
+                        </button>
                         <button class="mem-close-btn" id="mem-close-btn" title="Close">&times;</button>
                     </div>
+                </div>
+                <div class="mem-privacy-notice">
+                    <i data-lucide="shield" class="icon"></i>
+                    <span>Memory is opt-in (Settings &rarr; Tools). Stored only in this browser (IndexedDB) and never sent anywhere. Saving is explicit — nothing is captured automatically. <strong>Clear All</strong> erases every entry.</span>
                 </div>
                 <div class="mem-toolbar">
                     <input type="text" class="mem-search-input" id="mem-search" placeholder="Search memories..." autocomplete="off">
@@ -78,7 +85,7 @@ class MemoryPanel {
                 <div class="mem-content" id="mem-content"></div>
                 <div class="mem-footer">
                     <span id="mem-footer-stats">Loading...</span>
-                    <span>Memories are injected into chat context automatically</span>
+                    <span>Recall is opt-in via Settings &rarr; Tools &middot; save with the “Save to memory” button on a message</span>
                 </div>
             </div>
         `;
@@ -124,6 +131,8 @@ class MemoryPanel {
         this.modal.querySelector('#mem-import-btn').addEventListener('click', () => this._import());
         // Compact
         this.modal.querySelector('#mem-compact-btn').addEventListener('click', () => this._compact());
+        // Clear all (privacy / erase)
+        this.modal.querySelector('#mem-clear-btn').addEventListener('click', () => this._clearAll());
 
         // Keyboard
         document.addEventListener('keydown', (e) => {
@@ -449,6 +458,20 @@ class MemoryPanel {
             await this._updateStats();
         } catch (err) {
             toast.error('Compaction failed: ' + err.message);
+        }
+    }
+
+    async _clearAll() {
+        if (!confirm('Delete ALL memories? This permanently erases every entry and its embeddings, and cannot be undone.')) {
+            return;
+        }
+        try {
+            await memoryService.clearAll();
+            toast.success('All memories cleared');
+            await this._loadEntries();
+            await this._updateStats();
+        } catch (err) {
+            toast.error('Failed to clear memories: ' + err.message);
         }
     }
 }

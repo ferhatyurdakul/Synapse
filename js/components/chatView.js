@@ -407,6 +407,24 @@ class ChatView {
             const newChatId = await chatService.forkChat(chat.id, messageId);
             chatService.selectChat(newChatId);
         });
+
+        // Save message to semantic memory — explicit user action only.
+        // Nothing about a conversation is stored until the user clicks this.
+        window.addEventListener('save-to-memory', async (e) => {
+            const text = (e.detail?.content || '').trim();
+            if (!text) return;
+            try {
+                await memoryService.store({
+                    content: text,
+                    layer: 'fact',
+                    source: { type: 'user', label: 'chat' },
+                    tags: []
+                });
+                toast.success('Saved to memory');
+            } catch (err) {
+                toast.error('Failed to save to memory: ' + err.message);
+            }
+        });
     }
 
     displayChat(chat) {
@@ -817,19 +835,23 @@ class ChatView {
                 }
             }
 
-            // ── Semantic Memory: auto-inject relevant memories ────────────
-            const lastUserMsgForMemory = [...chat.messages].reverse().find(m => m.role === 'user');
-            if (lastUserMsgForMemory) {
-                try {
-                    const memoryContext = await memoryService.retrieveContext(
-                        lastUserMsgForMemory.content,
-                        chat.mode || 'chat'
-                    );
-                    if (memoryContext) {
-                        systemPrompt = memoryContext + '\n\n' + (systemPrompt || '');
+            // ── Semantic Memory: inject relevant memories only when opted in.
+            // memoryEnabled defaults to OFF; when disabled we never read memory
+            // into the prompt. Saving is always an explicit user action.
+            if (storageService.loadSettings().memoryEnabled) {
+                const lastUserMsgForMemory = [...chat.messages].reverse().find(m => m.role === 'user');
+                if (lastUserMsgForMemory) {
+                    try {
+                        const memoryContext = await memoryService.retrieveContext(
+                            lastUserMsgForMemory.content,
+                            chat.mode || 'chat'
+                        );
+                        if (memoryContext) {
+                            systemPrompt = memoryContext + '\n\n' + (systemPrompt || '');
+                        }
+                    } catch (err) {
+                        console.warn('[Memory] Retrieval failed, continuing without memory:', err);
                     }
-                } catch (err) {
-                    console.warn('[Memory] Retrieval failed, continuing without memory:', err);
                 }
             }
 
@@ -1225,6 +1247,12 @@ class ChatView {
 
         // Build action buttons based on role
         let actionButtons = `<button class="message-action-btn copy-btn" onclick="copyMessageContent(this)" title="Copy" aria-label="Copy"><i data-lucide="copy" class="icon"></i></button>`;
+
+        // Explicit "Save to memory" action — available on every saved
+        // message. Memory is never written automatically; the user chooses.
+        if (msgIndex >= 0) {
+            actionButtons += `<button class="message-action-btn save-memory-btn" onclick="saveMessageToMemory(this)" title="Save to memory" aria-label="Save to memory"><i data-lucide="bookmark" class="icon"></i></button>`;
+        }
 
         if (role === 'assistant' && msgIndex >= 0) {
             actionButtons += `<button class="message-action-btn branch-btn" onclick="branchFromHere(${msgIndex})" title="Branch from here" aria-label="Branch from here"><i data-lucide="git-branch" class="icon"></i></button>`;

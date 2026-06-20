@@ -316,6 +316,20 @@ class SettingsPanel {
                                 </div>
                             </div>
                         </div>
+
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Personal Memory</h3>
+                                    <p class="settings-description">Recall saved memories (facts, preferences, procedures, and context) into the system prompt so the model can reuse them across chats. Off by default — memory is never read into your conversations unless you enable it here. Saving is always explicit: use the "Save to memory" button on a message, or add entries by hand in the Memory panel. Nothing is captured automatically.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="memory-enabled-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <p class="settings-hint">V1 scope &amp; limits: memories live only in this browser's IndexedDB and never leave your device. They are indexed with the same embedding model configured for RAG, retrieved by vector + keyword similarity, and scoped per layer/project. Export, import, compact, or clear all memories from the Memory panel (status bar &rarr; Memory).</p>
+                        </div>
                     </div>
 
                     <!-- Knowledge Base Tab -->
@@ -833,6 +847,9 @@ class SettingsPanel {
         // Load line numbers toggle
         document.getElementById('line-numbers-toggle').checked = settings.codeBlockLineNumbers === true;
 
+        // Load personal memory toggle (opt-in, default off)
+        document.getElementById('memory-enabled-toggle').checked = settings.memoryEnabled === true;
+
         // Load RAG settings — load both providers in parallel
         await this.loadAllEmbeddingModels();
         document.getElementById('rag-chunk-size').value = settings.ragChunkSize || 512;
@@ -1161,6 +1178,7 @@ class SettingsPanel {
             settings.toolsEnabled = document.getElementById('tools-enabled-toggle').checked;
             settings.branchOnEdit = document.getElementById('branch-on-edit-toggle').checked;
             settings.codeBlockLineNumbers = document.getElementById('line-numbers-toggle').checked;
+            settings.memoryEnabled = document.getElementById('memory-enabled-toggle').checked;
             settings.titleEnabled = document.getElementById('title-enabled-toggle').checked;
             settings.summarizationEnabled = document.getElementById('summ-enabled-toggle').checked;
             settings.searchProvider = document.getElementById('search-provider-select').value;

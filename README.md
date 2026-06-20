@@ -28,6 +28,7 @@ Running local models often means juggling separate UIs for each provider, losing
 - **Chat organization** — Folders, search, drag-and-drop, flagging, export (Markdown/HTML/PDF)
 - **Model parameters** — Per-model temperature, top_p, top_k, context length, repeat penalty
 - **Context management** — Visual context meter with automatic summarization when the window fills up
+- **Personal memory** — Opt-in semantic memory: save facts, preferences, procedures, and context, and recall them into the system prompt. Saving is always explicit; nothing is ever captured automatically
 - **Auto titles** — LLM-generated chat titles after the first exchange
 - **Markdown & LaTeX** — Full rendering with syntax highlighting and KaTeX math
 - **Themes** — Switch between Retro (terminal aesthetic) and Modern (clean, minimal) in settings
@@ -78,6 +79,23 @@ Requires an API key from [tavily.com](https://tavily.com) and `server.py` as the
 Configure in **Settings > Tools > Tavily**.
 
 This release adds Tavily search only. Tavily content extraction is intentionally not wired into Synapse yet.
+
+## Personal Memory
+
+Synapse can keep a private, local semantic memory that the model reuses across chats. It is **off by default** and fully opt-in.
+
+- **Enable recall:** Settings → Tools → **Personal Memory**. Until you turn this on, saved memories are never injected into the system prompt.
+- **Saving is explicit only.** There is no automatic capture of your conversations. You add memories in two ways:
+  - Click the **Save to memory** (bookmark) button on any chat message.
+  - Add an entry by hand in the Memory panel (status bar → Memory → Add).
+- **Privacy & control:** memories live only in your browser's IndexedDB and never leave your device. From the Memory panel you can search, edit, export (JSON), import, compact (merge near-duplicates), or **Clear All** to erase everything.
+
+**V1 scope & limits:**
+
+- Storage: IndexedDB (`memoryEntries` + `memoryEmbeddings` stores), reusing the same embedding model configured for RAG.
+- Layers: `fact`, `preference`, `procedure`, `context`, scoped per project.
+- Retrieval: hybrid vector (cosine) + keyword (BM25-style) similarity, weighted 70/30, with recency and confidence weighting. Policies (top-K, threshold, layers) differ per workspace mode.
+- Limits: retrieval is bounded by mode-specific top-K and similarity thresholds; embeddings require a reachable embedding model. This is a V1 — there is no cross-device sync and no automatic summarization of memories into the store.
 
 ## Architecture
 

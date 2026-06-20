@@ -78,6 +78,14 @@ window.branchFromHere = function (index) {
     window.dispatchEvent(new CustomEvent('branch-from-here', { detail: { index } }));
 };
 
+// Save message content to semantic memory (explicit user action)
+window.saveMessageToMemory = function (btn) {
+    const message = btn.closest('.message');
+    const content = message.querySelector('.message-content');
+    const text = content.innerText || content.textContent;
+    window.dispatchEvent(new CustomEvent('save-to-memory', { detail: { content: text } }));
+};
+
 // ── Throttled Lucide icon refresh ──
 // Deduplicates rapid createIcons() calls using microtask batching
 window.refreshIcons = (function () {

@@ -74,6 +74,28 @@
     color: var(--text-primary, #e0e0e0);
 }
 
+/* ── Privacy notice ───────────────────────────────────────────────────── */
+
+.mem-privacy-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    font-size: 0.74rem;
+    line-height: 1.4;
+    color: var(--text-secondary, #999);
+    background: rgba(108, 99, 255, 0.05);
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.04));
+}
+.mem-privacy-notice .icon {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+}
+.mem-privacy-notice strong {
+    color: var(--text-primary, #e0e0e0);
+}
+
 /* ── Toolbar ───────────────────────────────────────────────────────────── */
 
 .mem-toolbar {

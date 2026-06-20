@@ -106,7 +106,10 @@ class StorageService {
             ragChunkOverlap: 64,
             ragTopK: 5,
             ragSimilarityThreshold: 0.3,
-            codeBlockLineNumbers: false
+            codeBlockLineNumbers: false,
+            // Personal Memory — opt-in. When false, saved memories are never
+            // injected into the system prompt. Saving is always explicit.
+            memoryEnabled: false
         };
     }
 
