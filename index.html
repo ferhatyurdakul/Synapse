@@ -31,10 +31,20 @@
     <link rel="stylesheet" href="css/research-reports.css">
     <link rel="stylesheet" href="css/notes-tasks.css">
     <link rel="stylesheet" href="css/compare.css">
+    <link rel="stylesheet" href="css/appearance.css">
 
     <!-- Apply saved theme before paint to prevent flash -->
     <script>
-        try { const t = localStorage.getItem('synapse_theme'); if (t && t !== 'retro') document.documentElement.dataset.theme = t; } catch {}
+        try {
+            const savedAppearance = JSON.parse(localStorage.getItem('synapse_appearance') || '{}');
+            const t = savedAppearance.theme || localStorage.getItem('synapse_theme');
+            if (t && t !== 'retro') document.documentElement.dataset.theme = t;
+            if (savedAppearance.accent) document.documentElement.dataset.accent = savedAppearance.accent;
+            if (savedAppearance.typography) document.documentElement.dataset.typography = savedAppearance.typography;
+            if (savedAppearance.density) document.documentElement.dataset.density = savedAppearance.density;
+            if (savedAppearance.sidebar) document.documentElement.dataset.sidebar = savedAppearance.sidebar;
+            if (savedAppearance.layout) document.documentElement.dataset.layout = savedAppearance.layout;
+        } catch {}
     </script>
 
     <!-- KaTeX for LaTeX rendering -->

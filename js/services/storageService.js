@@ -89,6 +89,15 @@ class StorageService {
     getDefaultSettings() {
         return {
             theme: 'retro',
+            appearance: {
+                theme: 'retro',
+                accent: 'cyan',
+                typography: 'medium',
+                density: 'comfortable',
+                codeTheme: 'atom-one-dark',
+                sidebar: 'standard',
+                layout: 'balanced'
+            },
             selectedProvider: 'ollama',
             selectedModel: null,
             thinkingCollapsed: true,

@@ -32,6 +32,7 @@ const PARAM_DEFS = {
 
 const TABS = [
     { id: 'general', label: 'General', icon: 'sliders-horizontal' },
+    { id: 'appearance', label: 'Appearance', icon: 'palette' },
     { id: 'models', label: 'Models', icon: 'brain' },
     { id: 'tools', label: 'Tools', icon: 'wrench' },
     { id: 'knowledge', label: 'Knowledge Base', icon: 'library' },
@@ -79,37 +80,6 @@ class SettingsPanel {
                 <div class="settings-content">
                     <!-- General Tab -->
                     <div class="settings-page active" data-page="general">
-                        <div class="settings-section">
-                            <h3>Theme</h3>
-                            <p class="settings-description">Choose the visual style for Synapse.</p>
-                            <div class="settings-field">
-                                <div class="theme-picker" id="theme-picker">
-                                    <button class="theme-option" data-theme="retro" type="button">
-                                        <div class="theme-preview retro-preview">
-                                            <div class="theme-preview-sidebar"></div>
-                                            <div class="theme-preview-main">
-                                                <div class="theme-preview-msg"></div>
-                                                <div class="theme-preview-msg"></div>
-                                                <div class="theme-preview-input"></div>
-                                            </div>
-                                        </div>
-                                        <span>Retro</span>
-                                    </button>
-                                    <button class="theme-option" data-theme="modern" type="button">
-                                        <div class="theme-preview modern-preview">
-                                            <div class="theme-preview-sidebar"></div>
-                                            <div class="theme-preview-main">
-                                                <div class="theme-preview-msg"></div>
-                                                <div class="theme-preview-msg"></div>
-                                                <div class="theme-preview-input"></div>
-                                            </div>
-                                        </div>
-                                        <span>Modern</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
                         <div class="settings-section">
                             <h3>System Prompt</h3>
                             <p class="settings-description">Default instructions sent to the model at the start of every chat. Folder prompts override this.</p>
@@ -161,6 +131,20 @@ class SettingsPanel {
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Appearance Tab -->
+                    <div class="settings-page" data-page="appearance">
+                        <div class="settings-section appearance-editor-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Theme & Appearance Editor</h3>
+                                    <p class="settings-description">Tune Synapse across chat, research, documents, compare, calendar, and admin surfaces. Changes preview live and are saved with your workspace settings.</p>
+                                </div>
+                                <button id="appearance-reset-btn" class="settings-btn secondary" type="button">Reset</button>
+                            </div>
+                            ${this.renderAppearanceEditor()}
                         </div>
                     </div>
 
@@ -581,6 +565,93 @@ class SettingsPanel {
         return div.innerHTML;
     }
 
+    renderAppearanceEditor() {
+        const appearance = themeService.getAppearance();
+        const select = (id, label, value, options) => `
+            <div class="appearance-control">
+                <label for="${id}">${label}</label>
+                <select id="${id}" class="settings-select appearance-input" data-appearance-key="${id.replace('appearance-', '')}">
+                    ${options.map(option => `<option value="${option.id}" ${option.id === value ? 'selected' : ''}>${option.label}</option>`).join('')}
+                </select>
+            </div>`;
+
+        return `
+            <div class="appearance-editor-grid">
+                <div class="appearance-preview-card" id="appearance-preview-card">
+                    <div class="appearance-preview-sidebar"></div>
+                    <div class="appearance-preview-main">
+                        <div class="appearance-preview-topbar"></div>
+                        <div class="appearance-preview-message primary"></div>
+                        <div class="appearance-preview-message secondary"></div>
+                        <div class="appearance-preview-toolbar">
+                            <span>Chat</span><span>Research</span><span>Docs</span><span>Compare</span><span>Admin</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="appearance-controls-grid">
+                    ${select('appearance-theme', 'Theme mode', appearance.theme, themeService.getAvailableThemes())}
+                    ${select('appearance-accent', 'Accent palette', appearance.accent, themeService.getAccentPalettes())}
+                    ${select('appearance-typography', 'Typography scale', appearance.typography, themeService.getTypographyScales())}
+                    ${select('appearance-density', 'Density', appearance.density, themeService.getDensityOptions())}
+                    ${select('appearance-codeTheme', 'Code theme', appearance.codeTheme, themeService.getCodeThemes())}
+                    ${select('appearance-sidebar', 'Sidebar', appearance.sidebar, themeService.getSidebarOptions())}
+                    ${select('appearance-layout', 'Layout preference', appearance.layout, themeService.getLayoutOptions())}
+                </div>
+            </div>
+            <div class="appearance-presets">
+                <h4>Built-in presets</h4>
+                <div class="appearance-preset-grid">
+                    ${themeService.getPresets().map(preset => `
+                        <button class="appearance-preset" type="button" data-preset="${preset.id}">
+                            <strong>${preset.label}</strong>
+                            <span>${preset.description}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>`;
+    }
+
+    bindAppearanceEditor() {
+        const updateFromInputs = () => {
+            const current = themeService.getAppearance();
+            document.querySelectorAll('.appearance-input').forEach(input => {
+                current[input.dataset.appearanceKey] = input.value;
+            });
+            themeService.setAppearance(current);
+            this.syncAppearanceControls();
+        };
+
+        document.querySelectorAll('.appearance-input').forEach(input => {
+            input.addEventListener('input', updateFromInputs);
+            input.addEventListener('change', updateFromInputs);
+        });
+
+        document.querySelectorAll('.appearance-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                themeService.applyPreset(btn.dataset.preset);
+                this.syncAppearanceControls();
+                toast.success('Appearance preset applied');
+            });
+        });
+
+        document.getElementById('appearance-reset-btn')?.addEventListener('click', () => {
+            themeService.resetAppearance();
+            this.syncAppearanceControls();
+            toast.success('Appearance reset to defaults');
+        });
+    }
+
+    syncAppearanceControls() {
+        const appearance = themeService.getAppearance();
+        document.querySelectorAll('.appearance-input').forEach(input => {
+            const key = input.dataset.appearanceKey;
+            if (appearance[key]) input.value = appearance[key];
+        });
+        document.querySelectorAll('.theme-option').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.theme === appearance.theme);
+        });
+    }
+
     attachEventListeners() {
         document.getElementById('settings-close-btn').addEventListener('click', () => this.close());
         document.querySelector('.settings-overlay').addEventListener('click', () => this.close());
@@ -595,6 +666,9 @@ class SettingsPanel {
                 themeService.setTheme(btn.dataset.theme);
             });
         });
+
+        // Appearance editor — live preview and persist immediately
+        this.bindAppearanceEditor();
 
         // Tab switching
         document.querySelectorAll('.settings-tab').forEach(btn => {
@@ -832,11 +906,8 @@ class SettingsPanel {
 
         const settings = storageService.loadSettings();
 
-        // Set active theme button
-        const currentTheme = settings.theme || 'retro';
-        document.querySelectorAll('.theme-option').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.theme === currentTheme);
-        });
+        // Sync appearance controls
+        this.syncAppearanceControls();
 
         // Load tools toggle
         document.getElementById('tools-enabled-toggle').checked = settings.toolsEnabled !== false;
@@ -1185,6 +1256,8 @@ class SettingsPanel {
             settings.searxngUrl = document.getElementById('searxng-url-input').value.trim();
             settings.braveApiKey = document.getElementById('brave-api-key-input').value.trim();
             settings.tavilyApiKey = document.getElementById('tavily-api-key-input').value.trim();
+            settings.appearance = themeService.getAppearance();
+            settings.theme = settings.appearance.theme;
 
             // RAG settings — per-provider embedding models
             settings.ragEmbeddingsModelOllama = document.getElementById('rag-model-ollama').value || '';
