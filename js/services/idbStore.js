@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 12;
+const DB_VERSION = 13;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -211,6 +211,20 @@ const STORES = {
             { name: 'status', keyPath: 'status' },
             { name: 'blind', keyPath: 'blind' },
             { name: 'projectId', keyPath: 'projectId' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+
+    // ── Contacts and people workspace (v13) ────────────────────────────────
+    contacts: {
+        version: 13,
+        keyPath: 'id',
+        indexes: [
+            { name: 'name', keyPath: 'name' },
+            { name: 'organization', keyPath: 'organization' },
+            { name: 'favorite', keyPath: 'favorite' },
+            { name: 'archived', keyPath: 'archived' },
             { name: 'updatedAt', keyPath: 'updatedAt' },
             { name: 'createdAt', keyPath: 'createdAt' }
         ]
