@@ -288,6 +288,19 @@ class InputArea {
             }
         });
 
+        // Image gallery attachment hook: lets saved/generated media reopen into chat
+        // without converting back into a File or requiring a fresh upload.
+        window.addEventListener('synapse:attachImageToChat', (event) => {
+            const dataUrl = event.detail?.dataUrl;
+            if (!dataUrl) return;
+            if (!this.supportsVision) {
+                toast.warning('The selected model does not advertise vision support yet.');
+            }
+            this.pendingImages.push(dataUrl);
+            this.renderImagePreviews();
+            this.focus();
+        });
+
         // Track embedding progress for pending files
         eventBus.on(Events.RAG_EMBEDDING_PROGRESS, ({ documentId, completed, total }) => {
             const pf = this.pendingFiles.find(f => f.docId === documentId);

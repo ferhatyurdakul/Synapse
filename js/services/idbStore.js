@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -226,6 +226,40 @@ const STORES = {
             { name: 'favorite', keyPath: 'favorite' },
             { name: 'archived', keyPath: 'archived' },
             { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+
+    // ── Image gallery and editor workspace (v14) ──────────────────────────
+    images: {
+        version: 14,
+        keyPath: 'id',
+        indexes: [
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'folderId', keyPath: 'folderId' },
+            { name: 'sourceType', keyPath: 'sourceType' },
+            { name: 'sourceChatId', keyPath: 'sourceChatId' },
+            { name: 'model', keyPath: 'model' },
+            { name: 'favorite', keyPath: 'favorite' },
+            { name: 'archived', keyPath: 'archived' },
+            { name: 'createdAt', keyPath: 'createdAt' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    imageFolders: {
+        version: 14,
+        keyPath: 'id',
+        indexes: [
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'name', keyPath: 'name' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    imageVersions: {
+        version: 14,
+        keyPath: 'id',
+        indexes: [
+            { name: 'imageId', keyPath: 'imageId' },
             { name: 'createdAt', keyPath: 'createdAt' }
         ]
     }
