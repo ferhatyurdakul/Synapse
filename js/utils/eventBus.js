@@ -161,6 +161,15 @@ export const Events = {
     RAG_EMBEDDING_ERROR: 'rag:embeddingError',
     RAG_SEARCH_EXECUTED: 'rag:searchExecuted',
 
+    // Voice events
+    VOICE_SETTINGS_CHANGED: 'voice:settingsChanged',
+    VOICE_AVAILABILITY_CHANGED: 'voice:availabilityChanged',
+    VOICE_STATE_CHANGED: 'voice:stateChanged',
+    VOICE_TRANSCRIPT_INTERIM: 'voice:transcriptInterim',
+    VOICE_TRANSCRIPT_READY: 'voice:transcriptReady',
+    VOICE_SPEAK_REQUESTED: 'voice:speakRequested',
+    VOICE_ERROR: 'voice:error',
+
     // Semantic Memory events
     MEMORY_STORED: 'memory:stored',
     MEMORY_DELETED: 'memory:deleted',

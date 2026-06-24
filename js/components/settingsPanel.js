@@ -11,6 +11,7 @@ import { systemStatsService } from '../services/systemStatsService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { toast } from './toast.js';
 import { themeService } from '../services/themeService.js';
+import { voiceService } from '../services/voiceService.js';
 
 // Default model parameters
 const DEFAULT_PARAMS = {
@@ -247,6 +248,50 @@ class SettingsPanel {
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <div>
+                                    <h3>Voice Input &amp; Text-to-Speech</h3>
+                                    <p class="settings-description">Optional browser-native microphone dictation and speech playback. Disabled by default for privacy; availability depends on the browser.</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="voice-enabled-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="voice-settings-grid">
+                                <label class="voice-mode-toggle"><input type="checkbox" id="voice-stt-toggle"> Speech-to-text input</label>
+                                <label class="voice-mode-toggle"><input type="checkbox" id="voice-tts-toggle"> Text-to-speech output</label>
+                                <label class="voice-mode-toggle"><input type="checkbox" id="voice-autospeak-toggle"> Auto-speak answers</label>
+                                <div class="settings-field">
+                                    <label for="voice-language-input">Language</label>
+                                    <input type="text" id="voice-language-input" class="settings-input" placeholder="en-US">
+                                </div>
+                                <div class="settings-field">
+                                    <label for="voice-select">Playback voice</label>
+                                    <select id="voice-select" class="settings-select">
+                                        <option value="">Browser default</option>
+                                    </select>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="voice-provider-select">Provider</label>
+                                    <select id="voice-provider-select" class="settings-select">
+                                        <option value="browser">Browser Web Speech API</option>
+                                        <option value="local" disabled>Local backend (not configured)</option>
+                                        <option value="remote" disabled>Remote backend (not configured)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="voice-mode-grid">
+                                <label class="voice-mode-toggle"><input type="checkbox" class="voice-per-mode" data-mode="chat"> Chat</label>
+                                <label class="voice-mode-toggle"><input type="checkbox" class="voice-per-mode" data-mode="research"> Research</label>
+                                <label class="voice-mode-toggle"><input type="checkbox" class="voice-per-mode" data-mode="compare"> Compare</label>
+                                <label class="voice-mode-toggle"><input type="checkbox" class="voice-per-mode" data-mode="document"> Documents</label>
+                                <label class="voice-mode-toggle"><input type="checkbox" class="voice-per-mode" data-mode="agent"> Agent runs</label>
+                            </div>
+                            <p class="voice-provider-note" id="voice-availability-note">Voice availability will be checked when settings opens.</p>
                         </div>
 
                         <div class="settings-section">
@@ -912,6 +957,9 @@ class SettingsPanel {
         // Load tools toggle
         document.getElementById('tools-enabled-toggle').checked = settings.toolsEnabled !== false;
 
+        // Load voice settings
+        this.loadVoiceSettings();
+
         // Load branch on edit toggle
         document.getElementById('branch-on-edit-toggle').checked = settings.branchOnEdit === true;
 
@@ -969,6 +1017,61 @@ class SettingsPanel {
     close() {
         this.isOpen = false;
         document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    loadVoiceSettings() {
+        const voice = voiceService.getSettings();
+        const availability = voiceService.getAvailability();
+        document.getElementById('voice-enabled-toggle').checked = voice.enabled === true;
+        document.getElementById('voice-stt-toggle').checked = voice.speechToTextEnabled === true;
+        document.getElementById('voice-tts-toggle').checked = voice.textToSpeechEnabled === true;
+        document.getElementById('voice-autospeak-toggle').checked = voice.autoSpeakAnswers === true;
+        document.getElementById('voice-language-input').value = voice.language || 'en-US';
+        document.getElementById('voice-provider-select').value = voice.provider || 'browser';
+
+        const voiceSelect = document.getElementById('voice-select');
+        if (voiceSelect) {
+            const options = ['<option value="">Browser default</option>'].concat(
+                availability.voices.map(v => {
+                    const label = `${this._escapeHtml(v.name)}${v.lang ? ` (${this._escapeHtml(v.lang)})` : ''}${v.localService ? ' · local' : ''}`;
+                    const selected = v.name === voice.selectedVoice ? ' selected' : '';
+                    return `<option value="${this._escapeHtml(v.name)}"${selected}>${label}</option>`;
+                })
+            );
+            voiceSelect.innerHTML = options.join('');
+        }
+
+        document.querySelectorAll('.voice-per-mode').forEach(input => {
+            input.checked = voice.perMode?.[input.dataset.mode] !== false;
+        });
+
+        const note = document.getElementById('voice-availability-note');
+        if (note) {
+            const stt = availability.stt ? 'speech recognition available' : 'speech recognition unavailable';
+            const tts = availability.tts ? `${availability.voices.length || 'browser default'} playback voice(s)` : 'speech playback unavailable';
+            note.textContent = `Browser provider: ${stt}; ${tts}. Remote/local STT and TTS are placeholders for future backend configuration.`;
+        }
+    }
+
+    readVoiceSettingsFromForm() {
+        const current = voiceService.getSettings();
+        const perMode = { ...current.perMode };
+        document.querySelectorAll('.voice-per-mode').forEach(input => {
+            perMode[input.dataset.mode] = input.checked;
+        });
+        return {
+            ...current,
+            enabled: document.getElementById('voice-enabled-toggle').checked,
+            speechToTextEnabled: document.getElementById('voice-stt-toggle').checked,
+            textToSpeechEnabled: document.getElementById('voice-tts-toggle').checked,
+            autoSpeakAnswers: document.getElementById('voice-autospeak-toggle').checked,
+            provider: document.getElementById('voice-provider-select').value || 'browser',
+            sttProvider: document.getElementById('voice-provider-select').value || 'browser',
+            ttsProvider: document.getElementById('voice-provider-select').value || 'browser',
+            selectedVoice: document.getElementById('voice-select').value || '',
+            language: document.getElementById('voice-language-input').value.trim() || 'en-US',
+            perMode
+        };
     }
 
     /**
@@ -1250,6 +1353,7 @@ class SettingsPanel {
             settings.branchOnEdit = document.getElementById('branch-on-edit-toggle').checked;
             settings.codeBlockLineNumbers = document.getElementById('line-numbers-toggle').checked;
             settings.memoryEnabled = document.getElementById('memory-enabled-toggle').checked;
+            settings.voice = this.readVoiceSettingsFromForm();
             settings.titleEnabled = document.getElementById('title-enabled-toggle').checked;
             settings.summarizationEnabled = document.getElementById('summ-enabled-toggle').checked;
             settings.searchProvider = document.getElementById('search-provider-select').value;

@@ -12,6 +12,7 @@ import { ragService } from '../services/ragService.js';
 import { memoryService } from '../services/memoryService.js';
 import { skillService } from '../services/skillService.js';
 import { agentRunService } from '../services/agentRunService.js';
+import { voiceService } from '../services/voiceService.js';
 import { eventBus, Events } from '../utils/eventBus.js';
 import { getSessionModeConfig } from '../config/sessionModes.js';
 import { renderMarkdown, renderLatexInElement, highlightCodeBlocks, escapeHtml } from '../utils/markdown.js';
@@ -1105,6 +1106,10 @@ class ChatView {
                 chatService.addMessageToChat(streamChatId, 'assistant', streamState.fullContent, streamState.fullThinking, statsData);
 
                 const appSettings = storageService.loadSettings();
+                const voiceSettings = voiceService.getSettings();
+                if (voiceSettings.textToSpeechEnabled === true && voiceSettings.autoSpeakAnswers === true && chatService.getCurrentChatId() === streamChatId) {
+                    voiceService.speak(streamState.fullContent);
+                }
 
                 // Generate title after the first exchange
                 if (appSettings.titleEnabled !== false) {
@@ -1263,6 +1268,7 @@ class ChatView {
         }
 
         if (role === 'assistant' && msgIndex >= 0) {
+            actionButtons += `<button class="message-action-btn speak-btn" onclick="speakMessageContent(this)" title="Speak message" aria-label="Speak message"><i data-lucide="volume-2" class="icon"></i></button>`;
             actionButtons += `<button class="message-action-btn regenerate-btn" onclick="regenerateFromHere(${msgIndex})" title="Regenerate from here" aria-label="Regenerate from here"><i data-lucide="rotate-cw" class="icon"></i></button>`;
         }
 
@@ -1460,3 +1466,11 @@ class ChatView {
 export function createChatView(containerId) {
     return new ChatView(containerId);
 }
+
+window.speakMessageContent = function speakMessageContent(btn) {
+    const message = btn.closest('.message');
+    const content = message?.querySelector('.message-content')?.innerText?.trim();
+    if (content) {
+        eventBus.emit(Events.VOICE_SPEAK_REQUESTED, { text: content });
+    }
+};

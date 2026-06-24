@@ -6,6 +6,7 @@ import { eventBus, Events } from '../utils/eventBus.js';
 import { chatService } from '../services/chatService.js';
 import { storageService } from '../services/storageService.js';
 import { ragService } from '../services/ragService.js';
+import { voiceService } from '../services/voiceService.js';
 import { getSessionModeConfig } from '../config/sessionModes.js';
 import { toast } from './toast.js';
 
@@ -99,6 +100,9 @@ class InputArea {
                     <button id="attach-btn" class="attach-btn" title="Attach files or images" aria-label="Attach files or images">
                         <i data-lucide="paperclip" class="icon"></i>
                     </button>
+                    <button id="voice-record-btn" class="voice-btn" title="Voice input disabled" aria-label="Start voice input" disabled>
+                        <i data-lucide="mic" class="icon"></i>
+                    </button>
                     <textarea
                         id="message-input"
                         class="terminal-input"
@@ -108,12 +112,16 @@ class InputArea {
                     <button id="send-btn" class="send-btn" title="Send message" aria-label="Send message">
                         <i data-lucide="arrow-up" class="icon"></i>
                     </button>
+                    <button id="voice-stop-btn" class="voice-stop-btn hidden" title="Stop speaking" aria-label="Stop speaking">
+                        <i data-lucide="volume-x" class="icon"></i>
+                    </button>
                     <button id="stop-btn" class="stop-btn hidden" title="Stop generation" aria-label="Stop generation">
                         <i data-lucide="square" class="icon"></i>
                     </button>
                 </div>
                 <div class="input-hint">
                     Press <kbd>Enter</kbd> to send, <kbd>Shift+Enter</kbd> for new line
+                    <span id="voice-status" class="voice-status"></span>
                 </div>
             </div>
         `;
@@ -135,6 +143,8 @@ class InputArea {
         const stopBtn = document.getElementById('stop-btn');
         const attachBtn = document.getElementById('attach-btn');
         const attachInput = document.getElementById('attach-file-input');
+        const voiceBtn = document.getElementById('voice-record-btn');
+        const voiceStopBtn = document.getElementById('voice-stop-btn');
 
         // Auto-resize textarea and save draft
         input.addEventListener('input', () => {
@@ -172,6 +182,10 @@ class InputArea {
         stopBtn.addEventListener('click', () => {
             eventBus.emit(Events.STREAM_END, { aborted: true });
         });
+
+        // Voice capture / playback controls
+        voiceBtn.addEventListener('click', () => voiceService.toggleRecording());
+        voiceStopBtn.addEventListener('click', () => voiceService.stopSpeaking());
 
         // Web search toggle
         const webSearchBtn = document.getElementById('web-search-btn');
@@ -270,6 +284,7 @@ class InputArea {
 
         eventBus.on(Events.SESSION_MODE_CHANGED, () => {
             this.updateModePlaceholder();
+            voiceService.emitState();
         });
 
         eventBus.on(Events.TOOLS_CAPABILITY_CHANGED, ({ supportsTools }) => {
@@ -279,7 +294,38 @@ class InputArea {
 
         eventBus.on(Events.SETTINGS_UPDATED, () => {
             this.updateWebSearchAvailability();
+            voiceService.emitAvailability();
         });
+
+        eventBus.on(Events.VOICE_STATE_CHANGED, (state) => {
+            this.updateVoiceControls(state);
+        });
+
+        eventBus.on(Events.VOICE_AVAILABILITY_CHANGED, (availability) => {
+            this.updateVoiceControls({ availability, enabledForMode: voiceService.isEnabledForCurrentMode() });
+        });
+
+        eventBus.on(Events.VOICE_TRANSCRIPT_INTERIM, ({ transcript }) => {
+            this.showVoiceStatus(`Heard: ${transcript}`, true);
+        });
+
+        eventBus.on(Events.VOICE_TRANSCRIPT_READY, ({ transcript }) => {
+            this.insertTranscript(transcript);
+        });
+
+        eventBus.on(Events.VOICE_SPEAK_REQUESTED, ({ text }) => {
+            voiceService.speak(text);
+        });
+
+        eventBus.on(Events.VOICE_ERROR, ({ message }) => {
+            toast.warning(message);
+            this.showVoiceStatus(message, false);
+        });
+
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+            window.speechSynthesis.onvoiceschanged = () => voiceService.emitAvailability();
+        }
+        voiceService.emitAvailability();
 
         eventBus.on(Events.VISION_CAPABILITY_CHANGED, ({ supportsVision }) => {
             this.supportsVision = supportsVision;
@@ -367,6 +413,53 @@ class InputArea {
         this.renderAttachments();
         this.clearDraft(chatService.getCurrentChatId());
         input.focus();
+    }
+
+    updateVoiceControls(state = {}) {
+        const voiceBtn = document.getElementById('voice-record-btn');
+        const voiceStopBtn = document.getElementById('voice-stop-btn');
+        if (!voiceBtn) return;
+        const availability = state.availability || voiceService.getAvailability();
+        const canRecord = voiceService.canRecord();
+        voiceBtn.disabled = !canRecord || this.isStreaming;
+        voiceBtn.classList.toggle('recording', state.isRecording === true);
+        voiceBtn.classList.toggle('active', canRecord);
+        voiceBtn.title = canRecord
+            ? (state.isRecording ? 'Stop recording' : 'Start voice input')
+            : availability.stt ? 'Voice input disabled for this mode' : 'Speech recognition unavailable in this browser';
+        voiceBtn.setAttribute('aria-label', state.isRecording ? 'Stop voice input' : 'Start voice input');
+
+        if (voiceStopBtn) {
+            voiceStopBtn.classList.toggle('hidden', state.isSpeaking !== true);
+            voiceStopBtn.disabled = state.isSpeaking !== true;
+        }
+
+        if (state.isRecording) this.showVoiceStatus('Recording…', true);
+        else if (state.isTranscribing) this.showVoiceStatus('Transcribing…', true);
+        else if (state.isSpeaking) this.showVoiceStatus('Speaking…', true);
+        else this.showVoiceStatus('', false);
+
+        refreshIcons();
+    }
+
+    showVoiceStatus(text, active = false) {
+        const status = document.getElementById('voice-status');
+        if (!status) return;
+        status.textContent = text || '';
+        status.classList.toggle('active', active && !!text);
+    }
+
+    insertTranscript(transcript) {
+        const input = document.getElementById('message-input');
+        if (!input || !transcript) return;
+        const spacer = input.value && !input.value.endsWith(' ') && !input.value.endsWith('\n') ? ' ' : '';
+        input.value = `${input.value}${spacer}${transcript}`;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        this.showVoiceStatus('Transcript added to chat input', false);
+        window.dispatchEvent(new CustomEvent('synapse:voiceTranscriptReady', {
+            detail: { transcript, mode: chatService.getCurrentMode?.() || 'chat' }
+        }));
+        this.focus();
     }
 
     // ── Document file handling ───────────────────────────────────────────
@@ -582,6 +675,7 @@ class InputArea {
             input.disabled = false;
             input.focus();
         }
+        this.updateVoiceControls();
     }
 
     focus() {

@@ -118,7 +118,26 @@ class StorageService {
             codeBlockLineNumbers: false,
             // Personal Memory — opt-in. When false, saved memories are never
             // injected into the system prompt. Saving is always explicit.
-            memoryEnabled: false
+            memoryEnabled: false,
+            // Voice features are privacy-sensitive and therefore disabled by default.
+            voice: {
+                enabled: false,
+                speechToTextEnabled: false,
+                textToSpeechEnabled: false,
+                autoSpeakAnswers: false,
+                provider: 'browser',
+                sttProvider: 'browser',
+                ttsProvider: 'browser',
+                selectedVoice: '',
+                language: 'en-US',
+                perMode: {
+                    chat: true,
+                    research: false,
+                    compare: false,
+                    document: true,
+                    agent: false
+                }
+            }
         };
     }
 
