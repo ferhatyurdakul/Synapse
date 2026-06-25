@@ -86,6 +86,7 @@ class NotesTasksPanel {
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && this.opened) this.close();
         });
+        window.addEventListener('synapse:voiceTranscriptReady', e => this._attachVoiceTranscript(e.detail));
     }
 
     async open() {
@@ -313,6 +314,17 @@ class NotesTasksPanel {
         this.activeId = item.id;
         if (this.opened) await this._load();
         return item;
+    }
+
+    async _attachVoiceTranscript(detail = {}) {
+        if (!this.opened || !this.activeId || !detail?.transcript) return;
+        const item = await notesTaskService.get(this.activeId);
+        if (!item) return;
+        const timestamp = new Date().toLocaleString();
+        const transcriptBlock = `\n\n### Voice Transcript (${timestamp})\n${detail.transcript.trim()}`;
+        await notesTaskService.update(item.id, { body: `${item.body || ''}${transcriptBlock}` });
+        toast.success('Voice transcript attached to active note/task');
+        await this._load();
     }
 }
 

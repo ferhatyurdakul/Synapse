@@ -89,6 +89,7 @@ class DocumentWorkspace {
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && this.isOpen) this.close();
         });
+        window.addEventListener('synapse:voiceTranscriptReady', e => this._attachVoiceTranscript(e.detail));
     }
 
     async open() {
@@ -374,6 +375,21 @@ class DocumentWorkspace {
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
+    }
+
+    async _attachVoiceTranscript(detail = {}) {
+        const doc = this._activeDoc();
+        if (!this.isOpen || !doc || !detail?.transcript) return;
+        const timestamp = new Date().toLocaleString();
+        const transcriptBlock = `\n\n## Voice Transcript (${timestamp})\n${detail.transcript.trim()}`;
+        const saved = await documentService.update(doc.id, {
+            content: `${doc.content || ''}${transcriptBlock}`,
+            origin: doc.origin || 'voice transcript'
+        }, { snapshot: true, reason: 'voice transcript attached' });
+        this.openTabs = this.openTabs.map(tab => tab.id === saved.id ? saved : tab);
+        await this._load();
+        this._renderEditor();
+        toast.success('Voice transcript attached to active document');
     }
 }
 

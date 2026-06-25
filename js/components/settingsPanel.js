@@ -276,12 +276,40 @@ class SettingsPanel {
                                     </select>
                                 </div>
                                 <div class="settings-field">
-                                    <label for="voice-provider-select">Provider</label>
-                                    <select id="voice-provider-select" class="settings-select">
+                                    <label for="voice-stt-provider-select">STT provider</label>
+                                    <select id="voice-stt-provider-select" class="settings-select">
                                         <option value="browser">Browser Web Speech API</option>
-                                        <option value="local" disabled>Local backend (not configured)</option>
-                                        <option value="remote" disabled>Remote backend (not configured)</option>
+                                        <option value="local">Local backend endpoint</option>
+                                        <option value="remote">Remote backend endpoint</option>
                                     </select>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="voice-tts-provider-select">TTS provider</label>
+                                    <select id="voice-tts-provider-select" class="settings-select">
+                                        <option value="browser">Browser speechSynthesis</option>
+                                        <option value="local">Local backend endpoint</option>
+                                        <option value="remote">Remote backend endpoint</option>
+                                    </select>
+                                </div>
+                                <div class="settings-field voice-provider-config">
+                                    <label for="voice-local-stt-url">Local STT URL</label>
+                                    <input type="text" id="voice-local-stt-url" class="settings-input" placeholder="http://localhost:8765/stt">
+                                </div>
+                                <div class="settings-field voice-provider-config">
+                                    <label for="voice-local-tts-url">Local TTS URL</label>
+                                    <input type="text" id="voice-local-tts-url" class="settings-input" placeholder="http://localhost:8765/tts">
+                                </div>
+                                <div class="settings-field voice-provider-config">
+                                    <label for="voice-remote-stt-url">Remote STT URL</label>
+                                    <input type="text" id="voice-remote-stt-url" class="settings-input" placeholder="https://api.example.com/stt">
+                                </div>
+                                <div class="settings-field voice-provider-config">
+                                    <label for="voice-remote-tts-url">Remote TTS URL</label>
+                                    <input type="text" id="voice-remote-tts-url" class="settings-input" placeholder="https://api.example.com/tts">
+                                </div>
+                                <div class="settings-field voice-provider-config">
+                                    <label for="voice-remote-api-key">Remote API key</label>
+                                    <input type="password" id="voice-remote-api-key" class="settings-input" placeholder="Optional bearer token">
                                 </div>
                             </div>
                             <div class="voice-mode-grid">
@@ -1027,7 +1055,13 @@ class SettingsPanel {
         document.getElementById('voice-tts-toggle').checked = voice.textToSpeechEnabled === true;
         document.getElementById('voice-autospeak-toggle').checked = voice.autoSpeakAnswers === true;
         document.getElementById('voice-language-input').value = voice.language || 'en-US';
-        document.getElementById('voice-provider-select').value = voice.provider || 'browser';
+        document.getElementById('voice-stt-provider-select').value = voice.sttProvider || voice.provider || 'browser';
+        document.getElementById('voice-tts-provider-select').value = voice.ttsProvider || voice.provider || 'browser';
+        document.getElementById('voice-local-stt-url').value = voice.localSttUrl || 'http://localhost:8765/stt';
+        document.getElementById('voice-local-tts-url').value = voice.localTtsUrl || 'http://localhost:8765/tts';
+        document.getElementById('voice-remote-stt-url').value = voice.remoteSttUrl || '';
+        document.getElementById('voice-remote-tts-url').value = voice.remoteTtsUrl || '';
+        document.getElementById('voice-remote-api-key').value = voice.remoteApiKey || '';
 
         const voiceSelect = document.getElementById('voice-select');
         if (voiceSelect) {
@@ -1049,7 +1083,9 @@ class SettingsPanel {
         if (note) {
             const stt = availability.stt ? 'speech recognition available' : 'speech recognition unavailable';
             const tts = availability.tts ? `${availability.voices.length || 'browser default'} playback voice(s)` : 'speech playback unavailable';
-            note.textContent = `Browser provider: ${stt}; ${tts}. Remote/local STT and TTS are placeholders for future backend configuration.`;
+            const sttProvider = voiceService.getProviderStatus('stt').message;
+            const ttsProvider = voiceService.getProviderStatus('tts').message;
+            note.textContent = `Browser provider: ${stt}; ${tts}. Config: STT ${sttProvider}; TTS ${ttsProvider}. Non-browser endpoints are stored for backend integrations; browser provider remains the live fallback.`;
         }
     }
 
@@ -1059,15 +1095,22 @@ class SettingsPanel {
         document.querySelectorAll('.voice-per-mode').forEach(input => {
             perMode[input.dataset.mode] = input.checked;
         });
+        const sttProvider = document.getElementById('voice-stt-provider-select').value || 'browser';
+        const ttsProvider = document.getElementById('voice-tts-provider-select').value || 'browser';
         return {
             ...current,
             enabled: document.getElementById('voice-enabled-toggle').checked,
             speechToTextEnabled: document.getElementById('voice-stt-toggle').checked,
             textToSpeechEnabled: document.getElementById('voice-tts-toggle').checked,
             autoSpeakAnswers: document.getElementById('voice-autospeak-toggle').checked,
-            provider: document.getElementById('voice-provider-select').value || 'browser',
-            sttProvider: document.getElementById('voice-provider-select').value || 'browser',
-            ttsProvider: document.getElementById('voice-provider-select').value || 'browser',
+            provider: sttProvider === ttsProvider ? sttProvider : 'mixed',
+            sttProvider,
+            ttsProvider,
+            localSttUrl: document.getElementById('voice-local-stt-url').value.trim() || 'http://localhost:8765/stt',
+            localTtsUrl: document.getElementById('voice-local-tts-url').value.trim() || 'http://localhost:8765/tts',
+            remoteSttUrl: document.getElementById('voice-remote-stt-url').value.trim(),
+            remoteTtsUrl: document.getElementById('voice-remote-tts-url').value.trim(),
+            remoteApiKey: document.getElementById('voice-remote-api-key').value.trim(),
             selectedVoice: document.getElementById('voice-select').value || '',
             language: document.getElementById('voice-language-input').value.trim() || 'en-US',
             perMode

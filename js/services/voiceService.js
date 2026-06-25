@@ -18,6 +18,11 @@ const DEFAULT_VOICE_SETTINGS = {
     provider: 'browser',
     sttProvider: 'browser',
     ttsProvider: 'browser',
+    localSttUrl: 'http://localhost:8765/stt',
+    localTtsUrl: 'http://localhost:8765/tts',
+    remoteSttUrl: '',
+    remoteTtsUrl: '',
+    remoteApiKey: '',
     selectedVoice: '',
     language: 'en-US',
     perMode: {
@@ -52,7 +57,7 @@ class VoiceService {
     }
 
     normalizeSettings(value = {}) {
-        return {
+        const normalized = {
             ...DEFAULT_VOICE_SETTINGS,
             ...value,
             perMode: {
@@ -60,6 +65,36 @@ class VoiceService {
                 ...(value.perMode || {})
             }
         };
+        normalized.sttProvider = value.sttProvider || value.provider || DEFAULT_VOICE_SETTINGS.sttProvider;
+        normalized.ttsProvider = value.ttsProvider || value.provider || DEFAULT_VOICE_SETTINGS.ttsProvider;
+        normalized.provider = normalized.sttProvider === normalized.ttsProvider ? normalized.sttProvider : 'mixed';
+        return normalized;
+    }
+
+    getProviderConfig(kind = 'stt') {
+        const settings = this.getSettings();
+        const provider = kind === 'tts' ? settings.ttsProvider : settings.sttProvider;
+        const urlKey = `${provider === 'remote' ? 'remote' : 'local'}${kind === 'tts' ? 'Tts' : 'Stt'}Url`;
+        return {
+            provider,
+            url: provider === 'browser' ? '' : (settings[urlKey] || '').trim(),
+            hasApiKey: provider !== 'remote' || !!settings.remoteApiKey,
+            apiKey: provider === 'remote' ? settings.remoteApiKey : ''
+        };
+    }
+
+    isProviderConfigured(kind = 'stt') {
+        const config = this.getProviderConfig(kind);
+        if (config.provider === 'browser') return true;
+        return !!config.url && config.hasApiKey;
+    }
+
+    getProviderStatus(kind = 'stt') {
+        const config = this.getProviderConfig(kind);
+        if (config.provider === 'browser') return { ok: true, message: 'Browser Web Speech API' };
+        if (!config.url) return { ok: false, message: `${config.provider} ${kind.toUpperCase()} endpoint is not configured` };
+        if (!config.hasApiKey) return { ok: false, message: 'Remote voice provider needs an API key' };
+        return { ok: true, message: `${config.provider} ${kind.toUpperCase()} endpoint configured` };
     }
 
     getAvailability() {
@@ -93,12 +128,16 @@ class VoiceService {
 
     canRecord() {
         const settings = this.getSettings();
-        return settings.speechToTextEnabled === true && this.isEnabledForCurrentMode() && this.getAvailability().stt;
+        if (settings.speechToTextEnabled !== true || !this.isEnabledForCurrentMode()) return false;
+        if (settings.sttProvider === 'browser') return this.getAvailability().stt;
+        return this.isProviderConfigured('stt');
     }
 
     canSpeak() {
         const settings = this.getSettings();
-        return settings.textToSpeechEnabled === true && this.isEnabledForCurrentMode() && this.getAvailability().tts;
+        if (settings.textToSpeechEnabled !== true || !this.isEnabledForCurrentMode()) return false;
+        if (settings.ttsProvider === 'browser') return this.getAvailability().tts;
+        return this.isProviderConfigured('tts');
     }
 
     toggleRecording() {
@@ -115,9 +154,14 @@ class VoiceService {
             return;
         }
 
+        const settings = this.getSettings();
+        if (settings.sttProvider !== 'browser') {
+            this.emitError('Configured local/remote STT endpoint is saved, but live microphone upload is not implemented yet. Use the browser provider for dictation.');
+            return;
+        }
+
         const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         this.recognition = new Recognition();
-        const settings = this.getSettings();
         this.recognition.lang = settings.language || 'en-US';
         this.recognition.continuous = false;
         this.recognition.interimResults = true;
@@ -183,8 +227,12 @@ class VoiceService {
             this.emitError('Text-to-speech is disabled or unavailable in this browser/mode.');
             return;
         }
-        this.stopSpeaking();
         const settings = this.getSettings();
+        if (settings.ttsProvider !== 'browser') {
+            this.emitError('Configured local/remote TTS endpoint is saved, but audio playback integration is not implemented yet. Use the browser provider for playback.');
+            return;
+        }
+        this.stopSpeaking();
         const utterance = new SpeechSynthesisUtterance(content);
         utterance.lang = settings.language || 'en-US';
         const selectedVoice = options.voice || settings.selectedVoice;

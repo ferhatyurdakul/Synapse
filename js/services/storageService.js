@@ -128,6 +128,11 @@ class StorageService {
                 provider: 'browser',
                 sttProvider: 'browser',
                 ttsProvider: 'browser',
+                localSttUrl: 'http://localhost:8765/stt',
+                localTtsUrl: 'http://localhost:8765/tts',
+                remoteSttUrl: '',
+                remoteTtsUrl: '',
+                remoteApiKey: '',
                 selectedVoice: '',
                 language: 'en-US',
                 perMode: {
