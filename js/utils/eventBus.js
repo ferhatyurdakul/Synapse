@@ -170,6 +170,13 @@ export const Events = {
     VOICE_SPEAK_REQUESTED: 'voice:speakRequested',
     VOICE_ERROR: 'voice:error',
 
+    // Calendar events
+    CALENDAR_UPDATED: 'calendar:updated',
+    CALENDAR_EVENT_SAVED: 'calendar:eventSaved',
+    CALENDAR_EVENT_DELETED: 'calendar:eventDeleted',
+    CALENDAR_REMINDER_DUE: 'calendar:reminderDue',
+    CALENDAR_AGENT_PROPOSAL: 'calendar:agentProposal',
+
     // Semantic Memory events
     MEMORY_STORED: 'memory:stored',
     MEMORY_DELETED: 'memory:deleted',

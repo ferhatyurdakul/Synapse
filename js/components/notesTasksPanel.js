@@ -217,6 +217,7 @@ class NotesTasksPanel {
                 <button data-ai="summary" type="button">AI: summarize state</button>
                 <button data-ai="deadlines" type="button">AI: extract deadlines</button>
                 <button data-ai="next-actions" type="button">AI: next actions</button>
+                <button id="nt-schedule" type="button">Schedule on calendar</button>
             </section>
             <section id="nt-suggestion" class="nt-suggestion hidden"></section>
             <section class="nt-sources">
@@ -241,6 +242,7 @@ class NotesTasksPanel {
         this.modal.querySelectorAll('#nt-checklist-items input').forEach(box => box.addEventListener('change', async e => { await notesTaskService.toggleChecklist(item.id, e.target.dataset.id); await this._load(); }));
         this.modal.querySelector('#nt-add-check')?.addEventListener('submit', e => this._addChecklist(e, item));
         this.modal.querySelectorAll('[data-ai]').forEach(btn => btn.addEventListener('click', e => this._showSuggestion(item.id, e.target.dataset.ai)));
+        this.modal.querySelector('#nt-schedule')?.addEventListener('click', () => this._scheduleItem(item));
     }
 
     _editorPatch() {
@@ -294,6 +296,21 @@ class NotesTasksPanel {
         const box = this.modal.querySelector('#nt-suggestion');
         box.classList.remove('hidden');
         box.innerHTML = `<strong>${escapeHtml(suggestion.title)}</strong><pre>${escapeHtml(suggestion.content)}</pre>`;
+    }
+
+    _scheduleItem(item) {
+        window.dispatchEvent(new CustomEvent('synapse:calendarCreateDraft', {
+            detail: {
+                id: item.id,
+                type: item.type,
+                title: item.title,
+                body: item.body,
+                dueAt: item.dueAt || item.startAt || item.reminder?.at,
+                sourceRefs: item.sourceRefs,
+                links: item.links
+            }
+        }));
+        toast.success('Calendar draft opened');
     }
 
     async _batch(patch) {

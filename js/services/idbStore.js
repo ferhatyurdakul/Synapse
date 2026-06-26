@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 14;
+const DB_VERSION = 15;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -261,6 +261,31 @@ const STORES = {
         indexes: [
             { name: 'imageId', keyPath: 'imageId' },
             { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+
+    // ── Calendar workspace and scheduling (v15) ───────────────────────────
+    calendars: {
+        version: 15,
+        keyPath: 'id',
+        indexes: [
+            { name: 'name', keyPath: 'name' },
+            { name: 'enabled', keyPath: 'enabled' },
+            { name: 'source', keyPath: 'source' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    calendarEvents: {
+        version: 15,
+        keyPath: 'id',
+        indexes: [
+            { name: 'calendarId', keyPath: 'calendarId' },
+            { name: 'startAt', keyPath: 'startAt' },
+            { name: 'endAt', keyPath: 'endAt' },
+            { name: 'sourceType', keyPath: 'sourceType' },
+            { name: 'approvalStatus', keyPath: 'approvalStatus' },
+            { name: 'importFingerprint', keyPath: 'importFingerprint' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
         ]
     }
 };

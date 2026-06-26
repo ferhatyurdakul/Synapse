@@ -18,6 +18,7 @@ import { createNotesTasksPanel } from './components/notesTasksPanel.js';
 import { createComparePanel } from './components/comparePanel.js';
 import { createContactsPanel } from './components/contactsPanel.js';
 import { createImageGalleryPanel } from './components/imageGalleryPanel.js';
+import { createCalendarPanel } from './components/calendarPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -30,6 +31,7 @@ import { providerManager } from './services/providerManager.js';
 import { eventBus, Events } from './utils/eventBus.js';
 import { toast } from './components/toast.js';
 import { themeService } from './services/themeService.js';
+import { calendarService } from './services/calendarService.js';
 import './tools/builtins.js'; // registers built-in tools into toolRegistry
 import './tools/webSearch.js'; // registers web search tool
 import './tools/backendTools.js'; // registers backend tool runner tools
@@ -49,6 +51,7 @@ class App {
         this.comparePanel = null;
         this.contactsPanel = null;
         this.imageGalleryPanel = null;
+        this.calendarPanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -65,6 +68,7 @@ class App {
         await mcpService.load();
         await memoryService.init();
         await skillService.init();
+        await calendarService.init();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();
@@ -86,6 +90,7 @@ class App {
         this.comparePanel = createComparePanel();
         this.contactsPanel = createContactsPanel();
         this.imageGalleryPanel = createImageGalleryPanel();
+        this.calendarPanel = createCalendarPanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -191,6 +196,11 @@ class App {
             this.imageGalleryPanel?.open();
         });
 
+        // Calendar workspace
+        document.getElementById('calendar-btn')?.addEventListener('click', () => {
+            this.calendarPanel?.open();
+        });
+
         // Memory panel
         document.getElementById('memory-btn')?.addEventListener('click', () => {
             this.memoryPanel?.open();
@@ -222,6 +232,10 @@ class App {
                 }
                 if (this.imageGalleryPanel?.isOpen()) {
                     this.imageGalleryPanel.close();
+                    return;
+                }
+                if (this.calendarPanel?.isOpen()) {
+                    this.calendarPanel.close();
                     return;
                 }
                 if (this.memoryPanel?.isOpen) {
