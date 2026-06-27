@@ -87,6 +87,7 @@ class NotesTasksPanel {
             if (e.key === 'Escape' && this.opened) this.close();
         });
         window.addEventListener('synapse:voiceTranscriptReady', e => this._attachVoiceTranscript(e.detail));
+        window.addEventListener('synapse:notesCapture', e => this.captureFromSource(e.detail || {}, { type: e.detail?.type || 'note' }));
     }
 
     async open() {

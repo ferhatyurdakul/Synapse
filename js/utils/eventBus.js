@@ -177,6 +177,17 @@ export const Events = {
     CALENDAR_REMINDER_DUE: 'calendar:reminderDue',
     CALENDAR_AGENT_PROPOSAL: 'calendar:agentProposal',
 
+    // Email workspace + AI triage events
+    EMAIL_UPDATED: 'email:updated',
+    EMAIL_ACCOUNT_SAVED: 'email:accountSaved',
+    EMAIL_MESSAGE_SAVED: 'email:messageSaved',
+    EMAIL_MESSAGE_DELETED: 'email:messageDeleted',
+    EMAIL_TRIAGED: 'email:triaged',
+    EMAIL_DRAFT_REVIEW: 'email:draftReview',
+    EMAIL_SENT: 'email:sent',
+    EMAIL_FOLLOWUP_DUE: 'email:followUpDue',
+    EMAIL_AGENT_PROPOSAL: 'email:agentProposal',
+
     // Semantic Memory events
     MEMORY_STORED: 'memory:stored',
     MEMORY_DELETED: 'memory:deleted',

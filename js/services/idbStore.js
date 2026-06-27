@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 15;
+const DB_VERSION = 16;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -285,6 +285,45 @@ const STORES = {
             { name: 'sourceType', keyPath: 'sourceType' },
             { name: 'approvalStatus', keyPath: 'approvalStatus' },
             { name: 'importFingerprint', keyPath: 'importFingerprint' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+
+    // ── Email workspace and AI triage (v16) ───────────────────────────────
+    emailAccounts: {
+        version: 16,
+        keyPath: 'id',
+        indexes: [
+            { name: 'address', keyPath: 'address' },
+            { name: 'enabled', keyPath: 'enabled' },
+            { name: 'provider', keyPath: 'provider' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    emailFolders: {
+        version: 16,
+        keyPath: 'id',
+        indexes: [
+            { name: 'accountId', keyPath: 'accountId' },
+            { name: 'role', keyPath: 'role' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    emailMessages: {
+        version: 16,
+        keyPath: 'id',
+        indexes: [
+            { name: 'accountId', keyPath: 'accountId' },
+            { name: 'folder', keyPath: 'folder' },
+            { name: 'threadId', keyPath: 'threadId' },
+            { name: 'date', keyPath: 'date' },
+            { name: 'read', keyPath: 'read' },
+            { name: 'starred', keyPath: 'starred' },
+            { name: 'triageCategory', keyPath: 'triage.category' },
+            { name: 'draftStatus', keyPath: 'draft.status' },
+            { name: 'followUpDueAt', keyPath: 'followUp.dueAt' },
+            { name: 'sourceType', keyPath: 'source.type' },
+            { name: 'messageId', keyPath: 'messageId' },
             { name: 'updatedAt', keyPath: 'updatedAt' }
         ]
     }

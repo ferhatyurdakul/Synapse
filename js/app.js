@@ -19,6 +19,7 @@ import { createComparePanel } from './components/comparePanel.js';
 import { createContactsPanel } from './components/contactsPanel.js';
 import { createImageGalleryPanel } from './components/imageGalleryPanel.js';
 import { createCalendarPanel } from './components/calendarPanel.js';
+import { createEmailPanel } from './components/emailPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -32,6 +33,7 @@ import { eventBus, Events } from './utils/eventBus.js';
 import { toast } from './components/toast.js';
 import { themeService } from './services/themeService.js';
 import { calendarService } from './services/calendarService.js';
+import { emailService } from './services/emailService.js';
 import './tools/builtins.js'; // registers built-in tools into toolRegistry
 import './tools/webSearch.js'; // registers web search tool
 import './tools/backendTools.js'; // registers backend tool runner tools
@@ -52,6 +54,7 @@ class App {
         this.contactsPanel = null;
         this.imageGalleryPanel = null;
         this.calendarPanel = null;
+        this.emailPanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -69,6 +72,7 @@ class App {
         await memoryService.init();
         await skillService.init();
         await calendarService.init();
+        await emailService.init();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();
@@ -91,6 +95,7 @@ class App {
         this.contactsPanel = createContactsPanel();
         this.imageGalleryPanel = createImageGalleryPanel();
         this.calendarPanel = createCalendarPanel();
+        this.emailPanel = createEmailPanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -201,6 +206,11 @@ class App {
             this.calendarPanel?.open();
         });
 
+        // Email workspace + AI triage
+        document.getElementById('email-btn')?.addEventListener('click', () => {
+            this.emailPanel?.open();
+        });
+
         // Memory panel
         document.getElementById('memory-btn')?.addEventListener('click', () => {
             this.memoryPanel?.open();
@@ -236,6 +246,10 @@ class App {
                 }
                 if (this.calendarPanel?.isOpen()) {
                     this.calendarPanel.close();
+                    return;
+                }
+                if (this.emailPanel?.isOpen()) {
+                    this.emailPanel.close();
                     return;
                 }
                 if (this.memoryPanel?.isOpen) {
