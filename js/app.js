@@ -20,6 +20,7 @@ import { createContactsPanel } from './components/contactsPanel.js';
 import { createImageGalleryPanel } from './components/imageGalleryPanel.js';
 import { createCalendarPanel } from './components/calendarPanel.js';
 import { createEmailPanel } from './components/emailPanel.js';
+import { createBackupPanel } from './components/backupPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -55,6 +56,7 @@ class App {
         this.imageGalleryPanel = null;
         this.calendarPanel = null;
         this.emailPanel = null;
+        this.backupPanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -96,6 +98,7 @@ class App {
         this.imageGalleryPanel = createImageGalleryPanel();
         this.calendarPanel = createCalendarPanel();
         this.emailPanel = createEmailPanel();
+        this.backupPanel = createBackupPanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -211,6 +214,11 @@ class App {
             this.emailPanel?.open();
         });
 
+        // Backup, restore, and self-hosted operations
+        document.getElementById('backup-btn')?.addEventListener('click', () => {
+            this.backupPanel?.open();
+        });
+
         // Memory panel
         document.getElementById('memory-btn')?.addEventListener('click', () => {
             this.memoryPanel?.open();
@@ -250,6 +258,10 @@ class App {
                 }
                 if (this.emailPanel?.isOpen()) {
                     this.emailPanel.close();
+                    return;
+                }
+                if (this.backupPanel?.isOpen()) {
+                    this.backupPanel.close();
                     return;
                 }
                 if (this.memoryPanel?.isOpen) {

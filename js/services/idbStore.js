@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-const DB_VERSION = 16;
+export const DB_VERSION = 16;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -328,6 +328,15 @@ const STORES = {
         ]
     }
 };
+
+/**
+ * List the names of every object store in the schema (in declaration order).
+ * Used by backup/restore to enumerate coverage without drifting from the schema.
+ * @returns {string[]}
+ */
+export function listStoreNames() {
+    return Object.keys(STORES);
+}
 
 /**
  * Open (or create) the database. Returns the cached handle on subsequent calls.

@@ -32,6 +32,7 @@ Running local models often means juggling separate UIs for each provider, losing
 - **Auto titles** — LLM-generated chat titles after the first exchange
 - **Markdown & LaTeX** — Full rendering with syntax highlighting and KaTeX math
 - **Themes** — Switch between Retro (terminal aesthetic) and Modern (clean, minimal) in settings
+- **Backup, restore, and self-host operations** — Export local IndexedDB workspace data, preview JSON restores before applying them, inspect storage/provider/PWA health, and follow localhost/LAN/reverse-proxy recovery guidance from the Ops panel.
 - **Draft persistence** — Unsent messages are saved per-chat so you never lose work
 - **Keyboard shortcuts** — Escape to stop generation, Enter to send, Shift+Enter for newlines
 
@@ -160,6 +161,18 @@ Webhook support includes:
 - `POST /api/integrations/webhooks` — registers outbound webhook targets and returns a generated signing secret.
 - `POST /api/webhooks/emit` — emits an event to matching outbound hooks, signing each JSON body with `X-Synapse-Signature`.
 - `GET /api/integrations/audit` — tails local integration audit entries for token use and webhook delivery.
+
+## Backup, Restore, and Self-Hosting
+
+Open **Ops** from the status bar to manage long-lived local or self-hosted Synapse instances.
+
+- **Backup coverage:** the export enumerates all current IndexedDB stores, including chats/messages, attachments, documents/RAG, notes/tasks, research reports, memory, skills, compare sessions, contacts, images, voice/settings records, calendars, and email workspace metadata. It also includes selected local UI settings such as appearance/theme preferences.
+- **Manual backup:** click **Create Backup** to download a `synapse-backup-*.json` file. Treat it as sensitive: it can contain chats, memories, documents, email metadata, and local settings. Store off-device copies encrypted when possible.
+- **Restore preview:** choose a JSON backup to validate schema, store names, record counts, and warnings before anything is written. **Apply Restore** only becomes available after a valid preview. By default, selected stores are replaced and local UI settings are restored.
+- **Scheduled backup guidance:** browser apps cannot export while closed, so self-hosted users should pair regular manual exports with OS reminders or browser-profile snapshots. A practical retention baseline is 7 daily, 4 weekly, and 6 monthly backups.
+- **Health diagnostics:** the Ops panel checks IndexedDB availability, storage quota, active provider reachability, server mode, service-worker support, WebCrypto, and record counts so degraded self-hosted states are visible before recovery work.
+- **Deployment guidance:** localhost can run with `python3 server.py`; LAN/mobile should stay behind a trusted LAN or VPN; reverse-proxy setups should terminate TLS, enforce auth/body limits, and avoid exposing unauthenticated model endpoints. Package `server.py` with systemd, launchd, or Task Scheduler when running as a persistent service.
+- **Recovery:** if IndexedDB or a restore becomes unhealthy, keep the backup JSON untouched, refresh, preview again, restore smaller store groups first, and clear site data only after exporting anything still accessible.
 
 ## Settings
 
