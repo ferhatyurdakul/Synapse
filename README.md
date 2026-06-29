@@ -33,6 +33,7 @@ Running local models often means juggling separate UIs for each provider, losing
 - **Markdown & LaTeX** — Full rendering with syntax highlighting and KaTeX math
 - **Themes** — Switch between Retro (terminal aesthetic) and Modern (clean, minimal) in settings
 - **Backup, restore, and self-host operations** — Export local IndexedDB workspace data, preview JSON restores before applying them, inspect storage/provider/PWA health, and follow localhost/LAN/reverse-proxy recovery guidance from the Ops panel.
+- **Local model cookbook** — Scan hardware, compare model/quantization fit, save install-later runbooks, manage remote server profiles, and record benchmark results from the Cookbook panel.
 - **Draft persistence** — Unsent messages are saved per-chat so you never lose work
 - **Keyboard shortcuts** — Escape to stop generation, Enter to send, Shift+Enter for newlines
 
@@ -173,6 +174,16 @@ Open **Ops** from the status bar to manage long-lived local or self-hosted Synap
 - **Health diagnostics:** the Ops panel checks IndexedDB availability, storage quota, active provider reachability, server mode, service-worker support, WebCrypto, and record counts so degraded self-hosted states are visible before recovery work.
 - **Deployment guidance:** localhost can run with `python3 server.py`; LAN/mobile should stay behind a trusted LAN or VPN; reverse-proxy setups should terminate TLS, enforce auth/body limits, and avoid exposing unauthenticated model endpoints. Package `server.py` with systemd, launchd, or Task Scheduler when running as a persistent service.
 - **Recovery:** if IndexedDB or a restore becomes unhealthy, keep the backup JSON untouched, refresh, preview again, restore smaller store groups first, and clear site data only after exporting anything still accessible.
+
+## Local Model Cookbook
+
+Open **Cookbook** from the status bar to plan local or remote model setups before downloading large weights.
+
+- **Hardware profile:** Synapse detects browser-visible CPU/RAM/platform/GPU data and lets you override RAM, VRAM, provider stack, and machine details for realistic fit estimates.
+- **Recommendations:** the cookbook maps hardware + use case to model/quantization suggestions with memory estimates, fit explanations, and stretch targets.
+- **Provider runbooks:** generate copyable setup commands for Ollama, LM Studio, llama.cpp, vLLM, and OpenAI-compatible remote servers, then save “install later” runbooks.
+- **Remote profiles:** store local-first remote machine/server profiles so recommendations can target attached machines, not only the current browser host.
+- **Benchmarks:** record manual benchmark results or run a quick live test against the active provider; saved results are tied to a hardware snapshot so future recommendations can become evidence-based.
 
 ## Settings
 

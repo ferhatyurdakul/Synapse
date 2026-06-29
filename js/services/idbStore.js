@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-export const DB_VERSION = 16;
+export const DB_VERSION = 17;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -325,6 +325,36 @@ const STORES = {
             { name: 'sourceType', keyPath: 'source.type' },
             { name: 'messageId', keyPath: 'messageId' },
             { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+
+    // ── Local model cookbook and hardware-aware setup (v17) ────────────────
+    modelRemoteProfiles: {
+        version: 17,
+        keyPath: 'id',
+        indexes: [
+            { name: 'name', keyPath: 'name' },
+            { name: 'provider', keyPath: 'provider' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
+        ]
+    },
+    modelRunbooks: {
+        version: 17,
+        keyPath: 'id',
+        indexes: [
+            { name: 'modelId', keyPath: 'modelId' },
+            { name: 'provider', keyPath: 'provider' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+    modelBenchmarks: {
+        version: 17,
+        keyPath: 'id',
+        indexes: [
+            { name: 'modelId', keyPath: 'modelId' },
+            { name: 'provider', keyPath: 'provider' },
+            { name: 'createdAt', keyPath: 'createdAt' }
         ]
     }
 };

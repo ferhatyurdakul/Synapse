@@ -27,7 +27,8 @@ const COVERAGE = [
     { label: 'Memory and skills', stores: ['memoryEntries', 'memoryEmbeddings', 'skills', 'templates'], note: 'Opt-in personal memory, embeddings, reusable workflows, and prompt templates.' },
     { label: 'Settings and UI state', stores: ['settings', 'modelSettings', 'uiState'], localStorage: LOCAL_STORAGE_KEYS, note: 'Provider URLs, model parameters, appearance, voice, and UI preferences.' },
     { label: 'Integrations and agent operations', stores: ['mcpServers', 'agentRuns', 'agentRunEvents', 'compareSessions'], note: 'MCP registry, agent run history, and compare/committee sessions.' },
-    { label: 'People, calendar, email', stores: ['contacts', 'calendars', 'calendarEvents', 'emailAccounts', 'emailFolders', 'emailMessages'], note: 'Local-first workspace data; external credentials/sync tokens are not created by backup.' }
+    { label: 'People, calendar, email', stores: ['contacts', 'calendars', 'calendarEvents', 'emailAccounts', 'emailFolders', 'emailMessages'], note: 'Local-first workspace data; external credentials/sync tokens are not created by backup.' },
+    { label: 'Local model cookbook', stores: ['modelRemoteProfiles', 'modelRunbooks', 'modelBenchmarks'], note: 'Hardware-aware model setup profiles, install-later runbooks, and benchmark evidence.' }
 ];
 
 function nowIso() {

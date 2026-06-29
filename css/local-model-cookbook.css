@@ -1,0 +1,145 @@
+.lm-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background: rgba(0, 0, 0, 0.62);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.lm-panel {
+    width: min(1180px, 96vw);
+    max-height: 92vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary, #111827);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+    border-radius: 18px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    color: var(--text-primary, #f8fafc);
+}
+
+.lm-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+}
+
+.lm-header h2 { margin: 2px 0 6px; font-size: 1.35rem; }
+.lm-header p { margin: 0; color: var(--text-secondary, #a7b0c0); }
+.lm-kicker { text-transform: uppercase; letter-spacing: .11em; font-size: .72rem; color: var(--accent-color, #7dd3fc) !important; font-weight: 700; }
+.lm-close { border: 0; background: transparent; color: inherit; font-size: 28px; cursor: pointer; opacity: .75; }
+.lm-close:hover { opacity: 1; }
+
+.lm-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,.12));
+}
+
+.lm-tabs button,
+.lm-actions button,
+.lm-rec button,
+.lm-card-head button,
+.lm-toolbar select {
+    border: 1px solid var(--border-color, rgba(255,255,255,.16));
+    background: var(--bg-secondary, rgba(255,255,255,.06));
+    color: var(--text-primary, #f8fafc);
+    border-radius: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.lm-tabs button.active,
+.lm-actions button:first-child,
+.lm-card-head button,
+.lm-rec button {
+    background: var(--accent-color, #38bdf8);
+    color: var(--accent-contrast, #06121f);
+    border-color: transparent;
+    font-weight: 700;
+}
+
+.lm-body { overflow: auto; padding: 20px; }
+.lm-grid { display: grid; gap: 16px; }
+.lm-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lm-catalog { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+
+.lm-card {
+    background: var(--bg-secondary, rgba(255,255,255,.055));
+    border: 1px solid var(--border-color, rgba(255,255,255,.12));
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.lm-card.compact { padding: 14px; }
+.lm-card h3 { margin: 0 0 10px; }
+.lm-card p { color: var(--text-secondary, #a7b0c0); }
+.lm-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+
+.lm-card label {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0;
+    color: var(--text-secondary, #a7b0c0);
+    font-size: .9rem;
+}
+
+.lm-card input,
+.lm-card textarea,
+.lm-card select {
+    width: 100%;
+    border: 1px solid var(--border-color, rgba(255,255,255,.16));
+    background: var(--bg-primary, rgba(0,0,0,.25));
+    color: var(--text-primary, #f8fafc);
+    border-radius: 10px;
+    padding: 9px 10px;
+    font: inherit;
+}
+
+.lm-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.lm-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+
+.lm-rec {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--border-color, rgba(255,255,255,.1));
+    background: rgba(255,255,255,.035);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 10px 0;
+}
+
+.lm-rec strong,
+.lm-rec span,
+.lm-rec small { display: block; }
+.lm-rec span { color: var(--text-secondary, #a7b0c0); margin-top: 3px; }
+.lm-rec small { color: var(--text-muted, #7c8798); margin-top: 4px; }
+
+.lm-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.lm-tags span {
+    border: 1px solid var(--border-color, rgba(255,255,255,.14));
+    border-radius: 999px;
+    padding: 3px 8px;
+    color: var(--text-secondary, #a7b0c0);
+    font-size: .78rem;
+}
+
+.lm-muted { color: var(--text-muted, #7c8798) !important; }
+.lm-card pre { white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,.28); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,.1); }
+
+@media (max-width: 780px) {
+    .lm-modal-backdrop { padding: 8px; }
+    .lm-grid.two { grid-template-columns: 1fr; }
+    .lm-header { padding: 16px; }
+    .lm-body { padding: 14px; }
+}
