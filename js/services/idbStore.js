@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'synapse_db';
-export const DB_VERSION = 17;
+export const DB_VERSION = 18;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -355,6 +355,30 @@ const STORES = {
             { name: 'modelId', keyPath: 'modelId' },
             { name: 'provider', keyPath: 'provider' },
             { name: 'createdAt', keyPath: 'createdAt' }
+        ]
+    },
+
+    // ── Deep Research active runs (v18) ───────────────────────────────────
+    deepResearchRuns: {
+        version: 18,
+        keyPath: 'id',
+        indexes: [
+            { name: 'status', keyPath: 'status' },
+            { name: 'projectId', keyPath: 'projectId' },
+            { name: 'createdAt', keyPath: 'createdAt' },
+            { name: 'updatedAt', keyPath: 'updatedAt' },
+            { name: 'reportId', keyPath: 'reportId' }
+        ]
+    },
+    deepResearchSources: {
+        version: 18,
+        keyPath: 'id',
+        indexes: [
+            { name: 'runId', keyPath: 'runId' },
+            { name: 'url', keyPath: 'normalizedUrl' },
+            { name: 'status', keyPath: 'status' },
+            { name: 'searchQuery', keyPath: 'searchQuery' },
+            { name: 'updatedAt', keyPath: 'updatedAt' }
         ]
     }
 };

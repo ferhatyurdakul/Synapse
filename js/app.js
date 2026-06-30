@@ -22,6 +22,7 @@ import { createCalendarPanel } from './components/calendarPanel.js';
 import { createEmailPanel } from './components/emailPanel.js';
 import { createBackupPanel } from './components/backupPanel.js';
 import { createLocalModelCookbookPanel } from './components/localModelCookbookPanel.js';
+import { createDeepResearchPanel } from './components/deepResearchPanel.js';
 import { createContextMeter } from './components/contextMeter.js';
 import { createWorkspaceModeSwitcher } from './components/workspaceModeSwitcher.js';
 import { storageService } from './services/storageService.js';
@@ -36,6 +37,7 @@ import { toast } from './components/toast.js';
 import { themeService } from './services/themeService.js';
 import { calendarService } from './services/calendarService.js';
 import { emailService } from './services/emailService.js';
+import { deepResearchService } from './services/deepResearchService.js';
 import './tools/builtins.js'; // registers built-in tools into toolRegistry
 import './tools/webSearch.js'; // registers web search tool
 import './tools/backendTools.js'; // registers backend tool runner tools
@@ -59,6 +61,7 @@ class App {
         this.emailPanel = null;
         this.backupPanel = null;
         this.localModelCookbookPanel = null;
+        this.deepResearchPanel = null;
         this.workspaceModeSwitcher = null;
         this._providerOnline = null; // null = unknown (initial state)
     }
@@ -77,6 +80,7 @@ class App {
         await skillService.init();
         await calendarService.init();
         await emailService.init();
+        await deepResearchService.init();
 
         // Check connectivity for active provider
         await this.checkProviderConnection();
@@ -102,6 +106,7 @@ class App {
         this.emailPanel = createEmailPanel();
         this.backupPanel = createBackupPanel();
         this.localModelCookbookPanel = createLocalModelCookbookPanel();
+        this.deepResearchPanel = createDeepResearchPanel();
         this.diagnosticsPanel = createDiagnosticsPanel();
 
         // Set up global event listeners
@@ -227,6 +232,11 @@ class App {
             this.localModelCookbookPanel?.open();
         });
 
+        // Deep Research active runner
+        document.getElementById('deep-research-btn')?.addEventListener('click', () => {
+            this.deepResearchPanel?.open();
+        });
+
         // Memory panel
         document.getElementById('memory-btn')?.addEventListener('click', () => {
             this.memoryPanel?.open();
@@ -274,6 +284,10 @@ class App {
                 }
                 if (this.localModelCookbookPanel?.isOpen()) {
                     this.localModelCookbookPanel.close();
+                    return;
+                }
+                if (this.deepResearchPanel?.isOpen()) {
+                    this.deepResearchPanel.close();
                     return;
                 }
                 if (this.memoryPanel?.isOpen) {

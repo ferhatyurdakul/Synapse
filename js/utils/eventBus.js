@@ -188,6 +188,9 @@ export const Events = {
     EMAIL_FOLLOWUP_DUE: 'email:followUpDue',
     EMAIL_AGENT_PROPOSAL: 'email:agentProposal',
 
+    // Deep Research active runs
+    DEEP_RESEARCH_UPDATED: 'deepResearch:updated',
+
     // Semantic Memory events
     MEMORY_STORED: 'memory:stored',
     MEMORY_DELETED: 'memory:deleted',
