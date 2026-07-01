@@ -48,7 +48,18 @@ class DeepResearchPanel {
                             <div class="deep-research-limit-grid">
                                 <label>Searches <input id="deep-research-max-searches" type="number" min="1" max="8" value="4"></label>
                                 <label>Sources <input id="deep-research-max-sources" type="number" min="1" max="20" value="8"></label>
+                                <label>Chars/source <input id="deep-research-max-chars" type="number" min="1200" max="30000" step="500" value="9000"></label>
+                                <label>Timeout ms <input id="deep-research-timeout" type="number" min="2500" max="30000" step="500" value="9000"></label>
                             </div>
+                            <label class="deep-research-select-label">Report format
+                                <select id="deep-research-format">
+                                    <option value="technical">Technical report</option>
+                                    <option value="summary">Executive summary</option>
+                                    <option value="comparison">Comparison</option>
+                                    <option value="recommendation">Recommendation</option>
+                                </select>
+                            </label>
+                            <label class="deep-research-checkbox"><input id="deep-research-second-pass" type="checkbox" checked> Run gap analysis + second pass when needed</label>
                             <button id="deep-research-start" class="deep-research-primary" type="submit"><i data-lucide="rocket" class="icon"></i> Start Research</button>
                         </form>
                         <div class="deep-research-history-head">
@@ -100,7 +111,11 @@ class DeepResearchPanel {
         const query = this.modal.querySelector('#deep-research-query').value.trim();
         const limits = {
             maxSearches: Number(this.modal.querySelector('#deep-research-max-searches').value) || 4,
-            maxSources: Number(this.modal.querySelector('#deep-research-max-sources').value) || 8
+            maxSources: Number(this.modal.querySelector('#deep-research-max-sources').value) || 8,
+            maxCharsPerSource: Number(this.modal.querySelector('#deep-research-max-chars').value) || 9000,
+            fetchTimeoutMs: Number(this.modal.querySelector('#deep-research-timeout').value) || 9000,
+            enableSecondPass: this.modal.querySelector('#deep-research-second-pass').checked,
+            reportFormat: this.modal.querySelector('#deep-research-format').value || 'technical'
         };
         try {
             this.running = true;
@@ -194,6 +209,8 @@ class DeepResearchPanel {
                 </div>
                 <div class="deep-research-actions">
                     <button data-action="copy-report" type="button"><i data-lucide="copy" class="icon"></i> Copy Report</button>
+                    <button data-action="export-md" type="button"><i data-lucide="download" class="icon"></i> Export MD</button>
+                    <button data-action="export-json" type="button"><i data-lucide="braces" class="icon"></i> Export JSON</button>
                     <button data-action="delete-run" type="button"><i data-lucide="trash-2" class="icon"></i> Delete</button>
                 </div>
             </div>
@@ -206,12 +223,28 @@ class DeepResearchPanel {
             <section><h4>Final Report</h4><pre class="deep-research-report">${escapeHtml(run.report || 'Report will appear after synthesis.')}</pre></section>
         `;
         detail.querySelector('[data-action="copy-report"]').addEventListener('click', () => this._copyReport(run));
+        detail.querySelector('[data-action="export-md"]').addEventListener('click', () => this._exportRun(run, 'markdown'));
+        detail.querySelector('[data-action="export-json"]').addEventListener('click', () => this._exportRun(run, 'json'));
         detail.querySelector('[data-action="delete-run"]').addEventListener('click', () => this._deleteRun(run.id));
     }
 
     async _copyReport(run) {
         await navigator.clipboard.writeText(run.report || '');
         toast.success('Research report copied');
+    }
+
+    async _exportRun(run, format) {
+        const body = await deepResearchService.exportRun(run.id, format);
+        const blob = new Blob([body], { type: format === 'json' ? 'application/json' : 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${(run.title || 'deep-research').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}.${format === 'json' ? 'json' : 'md'}`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        toast.success(`Deep Research ${format === 'json' ? 'JSON' : 'Markdown'} exported`);
     }
 
     async _deleteRun(runId) {

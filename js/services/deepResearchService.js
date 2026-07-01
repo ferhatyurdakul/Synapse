@@ -8,8 +8,12 @@ const DEFAULT_LIMITS = {
     maxResultsPerSearch: 5,
     maxSources: 8,
     maxCharsPerSource: 9000,
-    fetchTimeoutMs: 9000
+    fetchTimeoutMs: 9000,
+    enableSecondPass: true,
+    reportFormat: 'technical'
 };
+
+const REPORT_FORMATS = ['summary', 'technical', 'comparison', 'recommendation'];
 
 function now() {
     return new Date().toISOString();
@@ -23,6 +27,7 @@ function normalizeUrl(value = '') {
     try {
         const url = new URL(value);
         url.hash = '';
+        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid'].forEach(key => url.searchParams.delete(key));
         if (url.pathname.endsWith('/')) url.pathname = url.pathname.slice(0, -1);
         return url.toString().toLowerCase();
     } catch {
@@ -32,6 +37,31 @@ function normalizeUrl(value = '') {
 
 function normalizeText(value = '') {
     return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeTitle(value = '') {
+    return normalizeText(value).toLowerCase().replace(/[^a-z0-9 ]+/g, '').replace(/\b(the|a|an|and|or|of|for|to|in|on|with|by)\b/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function keywordSet(value = '') {
+    return new Set(normalizeText(value).toLowerCase().split(/\W+/).filter(term => term.length > 4));
+}
+
+function jaccardSimilarity(a, b) {
+    const left = keywordSet(a);
+    const right = keywordSet(b);
+    if (!left.size || !right.size) return 0;
+    let overlap = 0;
+    left.forEach(term => {
+        if (right.has(term)) overlap += 1;
+    });
+    return overlap / Math.max(1, new Set([...left, ...right]).size);
+}
+
+function clampNumber(value, min, max, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(number)));
 }
 
 function titleCase(value = '') {
@@ -45,7 +75,7 @@ function titleCase(value = '') {
 
 function sentenceScore(text = '') {
     const value = text.toLowerCase();
-    const signals = ['because', 'evidence', 'study', 'report', 'analysis', 'shows', 'according', 'data', 'estimate', 'risk', 'benefit'];
+    const signals = ['because', 'evidence', 'study', 'report', 'analysis', 'shows', 'according', 'data', 'estimate', 'risk', 'benefit', 'conflict', 'uncertain'];
     return signals.reduce((score, signal) => score + (value.includes(signal) ? 1 : 0), 0) + Math.min(4, text.length / 220);
 }
 
@@ -55,16 +85,25 @@ class DeepResearchService {
     }
 
     async init() {
-        // Touching the DB through storageService init is handled by App; this method exists for symmetry.
         return true;
     }
 
     getLimits(overrides = {}) {
         const settings = storageService.loadSettings?.() || {};
-        return {
+        const merged = {
             ...DEFAULT_LIMITS,
             ...settings.deepResearchLimits,
             ...overrides
+        };
+        return {
+            ...merged,
+            maxSearches: clampNumber(merged.maxSearches, 1, 8, DEFAULT_LIMITS.maxSearches),
+            maxResultsPerSearch: clampNumber(merged.maxResultsPerSearch, 1, 10, DEFAULT_LIMITS.maxResultsPerSearch),
+            maxSources: clampNumber(merged.maxSources, 1, 20, DEFAULT_LIMITS.maxSources),
+            maxCharsPerSource: clampNumber(merged.maxCharsPerSource, 1200, 30000, DEFAULT_LIMITS.maxCharsPerSource),
+            fetchTimeoutMs: clampNumber(merged.fetchTimeoutMs, 2500, 30000, DEFAULT_LIMITS.fetchTimeoutMs),
+            enableSecondPass: merged.enableSecondPass !== false,
+            reportFormat: REPORT_FORMATS.includes(merged.reportFormat) ? merged.reportFormat : DEFAULT_LIMITS.reportFormat
         };
     }
 
@@ -89,9 +128,19 @@ class DeepResearchService {
         eventBus.emit(Events.DEEP_RESEARCH_UPDATED, { runId, action: 'deleted' });
     }
 
+    async exportRun(runId, format = 'markdown') {
+        const run = await this.getRun(runId);
+        if (!run) throw new Error('Deep Research run not found.');
+        const sources = await this.getSources(runId);
+        if (format === 'json') return JSON.stringify({ ...run, sources }, null, 2);
+        const sourceAppendix = sources.map((source, index) => `- [${index + 1}] ${source.title} — ${source.url || 'No URL'} (${source.status}, confidence ${Math.round((source.confidence || 0) * 100)}%)`).join('\n');
+        return `${run.report || `# ${run.title || run.query}`}\n\n---\nExported from Synapse Deep Research on ${now()}\n\n## Source Appendix\n${sourceAppendix || 'No sources recorded.'}\n`;
+    }
+
     async startRun(query, options = {}) {
         const cleanedQuery = normalizeText(query);
         if (!cleanedQuery) throw new Error('Enter a research question first.');
+        const limits = this.getLimits(options.limits);
 
         const timestamp = now();
         const run = {
@@ -107,9 +156,11 @@ class DeepResearchService {
             sourceIds: [],
             notes: [],
             findings: [],
+            gapAnalysis: null,
+            reportFormat: limits.reportFormat,
             report: '',
             reportId: null,
-            limits: this.getLimits(options.limits),
+            limits,
             createdAt: timestamp,
             updatedAt: timestamp,
             completedAt: null,
@@ -127,11 +178,24 @@ class DeepResearchService {
 
             await this._recordStep(run, 'searching', 'running', 'Running multiple web searches.');
             const results = await this._runSearches(run);
-            await this._recordStep(run, 'searching', 'completed', `Collected ${results.length} unique candidate sources.`);
+            await this._recordStep(run, 'searching', 'completed', `Collected ${results.length} unique candidate sources after URL/title/snippet deduplication.`);
 
             await this._recordStep(run, 'reading', 'running', 'Fetching and extracting source text.');
             const sources = await this._fetchAndStoreSources(run, results);
             await this._recordStep(run, 'reading', 'completed', `Stored ${sources.length} readable sources.`);
+
+            if (run.limits.enableSecondPass) {
+                await this._recordStep(run, 'gap-analysis', 'running', 'Checking coverage, conflicts, weak evidence, and follow-up needs.');
+                run.gapAnalysis = this._analyzeGaps(run, await this.getSources(run.id));
+                await this._recordStep(run, 'gap-analysis', 'completed', this._gapSummary(run.gapAnalysis));
+                if (run.gapAnalysis.followUpQueries.length && run.sourceIds.length < run.limits.maxSources) {
+                    await this._recordStep(run, 'second-pass-search', 'running', 'Running follow-up searches for weak or missing evidence.');
+                    const followUpResults = await this._runFollowUpSearches(run, run.gapAnalysis.followUpQueries);
+                    if (followUpResults.length) await this._fetchAndStoreSources(run, followUpResults);
+                    run.gapAnalysis = this._analyzeGaps(run, await this.getSources(run.id));
+                    await this._recordStep(run, 'second-pass-search', 'completed', `Added ${followUpResults.length} follow-up candidate sources.`);
+                }
+            }
 
             await this._recordStep(run, 'synthesizing', 'running', 'Synthesizing cited report.');
             const sourceRecords = await this.getSources(run.id);
@@ -151,7 +215,7 @@ class DeepResearchService {
                 query: run.query,
                 topic: run.query,
                 projectId: run.projectId,
-                tags: ['deep-research'],
+                tags: ['deep-research', run.reportFormat],
                 status: 'completed',
                 sources: sourceRecords.map(source => ({
                     id: source.id,
@@ -210,7 +274,7 @@ class DeepResearchService {
 
     async _runSearches(run) {
         const all = [];
-        const seen = new Set();
+        const seen = [];
         for (const item of run.plan) {
             item.status = 'running';
             await this._saveRun(run);
@@ -219,10 +283,9 @@ class DeepResearchService {
                 item.status = 'completed';
                 run.searches.push({ query: item.searchQuery, count: results.length, completedAt: now() });
                 for (const result of results) {
-                    const key = normalizeUrl(result.url) || normalizeText(result.title).toLowerCase();
-                    if (!key || seen.has(key)) continue;
-                    seen.add(key);
-                    all.push({ ...result, searchQuery: item.searchQuery, rank: all.length + 1 });
+                    if (this._isDuplicateCandidate(result, seen)) continue;
+                    seen.push(result);
+                    all.push({ ...result, searchQuery: item.searchQuery, rank: all.length + 1, duplicateSignals: [] });
                     if (all.length >= run.limits.maxSources) break;
                 }
             } catch (err) {
@@ -235,6 +298,42 @@ class DeepResearchService {
         }
         if (!all.length) throw new Error('No web search results were collected. Check Settings → Web Search provider/API key or local SearXNG.');
         return all;
+    }
+
+    async _runFollowUpSearches(run, queries) {
+        const existing = await this.getSources(run.id);
+        const seen = existing.map(source => ({ title: source.title, url: source.url, snippet: source.snippet || source.excerpt || source.content }));
+        const candidates = [];
+        for (const query of queries.slice(0, 2)) {
+            try {
+                const results = await this._search(query, Math.min(3, run.limits.maxResultsPerSearch));
+                run.searches.push({ query, count: results.length, secondPass: true, completedAt: now() });
+                for (const result of results) {
+                    if (this._isDuplicateCandidate(result, [...seen, ...candidates])) continue;
+                    candidates.push({ ...result, searchQuery: query, secondPass: true, rank: existing.length + candidates.length + 1 });
+                    if (run.sourceIds.length + candidates.length >= run.limits.maxSources) break;
+                }
+            } catch (err) {
+                run.searches.push({ query, count: 0, secondPass: true, error: err.message || String(err), completedAt: now() });
+            }
+            await this._saveRun(run);
+            if (run.sourceIds.length + candidates.length >= run.limits.maxSources) break;
+        }
+        return candidates;
+    }
+
+    _isDuplicateCandidate(candidate, existing) {
+        const url = normalizeUrl(candidate.url);
+        const title = normalizeTitle(candidate.title);
+        const snippet = candidate.snippet || candidate.content || '';
+        return existing.some(item => {
+            const itemUrl = normalizeUrl(item.url);
+            if (url && itemUrl && url === itemUrl) return true;
+            if (title && normalizeTitle(item.title) === title) return true;
+            const titleSimilarity = jaccardSimilarity(candidate.title, item.title);
+            const contentSimilarity = jaccardSimilarity(snippet, item.snippet || item.content || item.excerpt || '');
+            return titleSimilarity >= 0.82 || contentSimilarity >= 0.72;
+        });
     }
 
     async _search(query, maxResults) {
@@ -288,16 +387,22 @@ class DeepResearchService {
 
     async _fetchAndStoreSources(run, results) {
         const sources = [];
+        const existing = await this.getSources(run.id);
+        const seen = [...existing.map(source => ({ title: source.title, url: source.url, content: source.content || source.excerpt || source.snippet }))];
         for (const result of results.slice(0, run.limits.maxSources)) {
+            if (run.sourceIds.length >= run.limits.maxSources) break;
+            if (this._isDuplicateCandidate(result, seen)) continue;
             const source = {
                 id: id('dsrc'),
                 runId: run.id,
-                rank: sources.length + 1,
+                rank: run.sourceIds.length + 1,
                 title: result.title || result.url || 'Untitled source',
                 url: result.url || '',
                 normalizedUrl: normalizeUrl(result.url),
+                normalizedTitle: normalizeTitle(result.title),
                 snippet: result.snippet || '',
                 searchQuery: result.searchQuery,
+                secondPass: Boolean(result.secondPass),
                 status: 'pending',
                 content: '',
                 excerpt: '',
@@ -313,7 +418,7 @@ class DeepResearchService {
                 source.content = content.slice(0, run.limits.maxCharsPerSource);
                 source.excerpt = this._bestExcerpt(source.content || source.snippet, run.query);
                 source.wordCount = source.content.split(/\s+/).filter(Boolean).length;
-                source.confidence = source.wordCount > 250 ? 0.75 : 0.6;
+                source.confidence = source.wordCount > 450 ? 0.78 : source.wordCount > 160 ? 0.68 : 0.58;
                 source.status = 'ready';
             } catch (err) {
                 source.status = 'snippet-only';
@@ -326,6 +431,7 @@ class DeepResearchService {
             source.updatedAt = now();
             await putRecord('deepResearchSources', source);
             run.sourceIds.push(source.id);
+            seen.push({ title: source.title, url: source.url, content: source.content || source.excerpt || source.snippet });
             await this._saveRun(run);
             sources.push(source);
         }
@@ -367,21 +473,82 @@ class DeepResearchService {
         return ranked.slice(0, 4).map(item => item.sentence).join(' ').slice(0, 1200) || normalizeText(text).slice(0, 1200);
     }
 
+    _analyzeGaps(run, sources) {
+        const usable = sources.filter(source => source.excerpt || source.snippet || source.content);
+        const failedSearches = run.searches.filter(search => search.error);
+        const snippetOnly = usable.filter(source => source.status === 'snippet-only');
+        const lowConfidence = usable.filter(source => (source.confidence || 0) < 0.6);
+        const conflictSignals = usable.filter(source => /\b(conflict|controvers|debate|uncertain|mixed evidence|inconsistent|risk|limitation)\b/i.test(`${source.excerpt} ${source.snippet}`));
+        const queryTerms = [...keywordSet(run.query)];
+        const uncoveredTerms = queryTerms.filter(term => !usable.some(source => `${source.title} ${source.excerpt} ${source.snippet}`.toLowerCase().includes(term)));
+        const followUpQueries = [];
+        if (usable.length < Math.min(4, run.limits.maxSources)) followUpQueries.push(`${run.query} independent sources evidence`);
+        if (snippetOnly.length > Math.max(1, usable.length / 2)) followUpQueries.push(`${run.query} detailed report analysis`);
+        if (conflictSignals.length) followUpQueries.push(`${run.query} conflicting evidence limitations`);
+        if (uncoveredTerms.length) followUpQueries.push(`${run.query} ${uncoveredTerms.slice(0, 3).join(' ')} evidence`);
+        return {
+            usableSources: usable.length,
+            failedSearches: failedSearches.length,
+            snippetOnlySources: snippetOnly.length,
+            lowConfidenceSources: lowConfidence.length,
+            conflictSignals: conflictSignals.map(source => ({ sourceId: source.id, title: source.title })),
+            uncoveredTerms,
+            followUpQueries: [...new Set(followUpQueries.map(normalizeText).filter(Boolean))].slice(0, 3),
+            updatedAt: now()
+        };
+    }
+
+    _gapSummary(gapAnalysis) {
+        if (!gapAnalysis) return 'No gap analysis recorded.';
+        const parts = [`${gapAnalysis.usableSources} usable sources`];
+        if (gapAnalysis.snippetOnlySources) parts.push(`${gapAnalysis.snippetOnlySources} snippet-only`);
+        if (gapAnalysis.conflictSignals.length) parts.push(`${gapAnalysis.conflictSignals.length} conflict/uncertainty signals`);
+        if (gapAnalysis.followUpQueries.length) parts.push(`${gapAnalysis.followUpQueries.length} follow-up queries queued`);
+        return parts.join('; ');
+    }
+
     _synthesizeReport(run, sources) {
         const usable = sources.filter(source => source.excerpt || source.snippet);
         const notes = usable.map((source, index) => ({
             sourceId: source.id,
             text: `[${index + 1}] ${source.title}: ${source.excerpt || source.snippet}`
         }));
-        const findings = usable.slice(0, 6).map((source, index) => `${index + 1}. ${source.title} suggests: ${(source.excerpt || source.snippet || '').slice(0, 240)}`);
+        const findings = usable.slice(0, 8).map((source, index) => `${index + 1}. ${source.title} suggests: ${(source.excerpt || source.snippet || '').slice(0, 280)}`);
         const sourceList = usable.map((source, index) => `${index + 1}. ${source.title} — ${source.url}`).join('\n');
         const summary = usable.length
-            ? `Reviewed ${usable.length} web sources for “${run.query}”. The strongest evidence is summarized below; verify critical claims before acting because synthesis is deterministic and source quality varies.`
+            ? `Reviewed ${usable.length} web sources for “${run.query}” with ${run.reportFormat} formatting. Source quality is mixed; verify critical claims before acting because synthesis is deterministic and browser fetches can be CORS-limited.`
             : `No readable sources were available for “${run.query}”.`;
-        const evidence = usable.map((source, index) => `- [${index + 1}] **${source.title}**: ${source.excerpt || source.snippet || 'No excerpt available.'}`).join('\n');
+        const evidence = usable.map((source, index) => `- [${index + 1}] **${source.title}** (${Math.round((source.confidence || 0) * 100)}% confidence): ${source.excerpt || source.snippet || 'No excerpt available.'}`).join('\n');
+        const uncertainty = this._formatUncertainty(run, usable);
+        const formatSection = this._formatReportBody(run, usable, evidence);
         const gaps = run.searches.filter(search => search.error).map(search => `- Search failed for “${search.query}”: ${search.error}`).join('\n') || '- No failed searches recorded. CORS may still limit full-text extraction for some web pages.';
-        const report = `# ${run.title}\n\n## Query\n${run.query}\n\n## Executive Summary\n${summary}\n\n## Research Plan\n${run.plan.map(item => `- ${item.subquestion} (${item.searchQuery})`).join('\n')}\n\n## Evidence Notes\n${evidence || 'No evidence notes recorded.'}\n\n## Uncertainty and Gaps\n${gaps}\n\n## Sources\n${sourceList || 'No sources recorded.'}\n`;
+        const report = `# ${run.title}\n\n## Query\n${run.query}\n\n## Executive Summary\n${summary}\n\n## Research Plan\n${run.plan.map(item => `- ${item.subquestion} (${item.searchQuery})`).join('\n')}\n\n${formatSection}\n\n## Evidence Notes\n${evidence || 'No evidence notes recorded.'}\n\n## Uncertainty, Conflicts, and Gaps\n${uncertainty}\n\n${gaps}\n\n## Sources\n${sourceList || 'No sources recorded.'}\n`;
         return { notes, findings, summary, report };
+    }
+
+    _formatReportBody(run, sources, evidence) {
+        if (run.reportFormat === 'summary') {
+            return `## Concise Answer\n${sources.slice(0, 4).map((source, index) => `- [${index + 1}] ${source.excerpt || source.snippet || source.title}`).join('\n') || 'No concise answer available.'}`;
+        }
+        if (run.reportFormat === 'comparison') {
+            return `## Comparison Matrix\n| Angle | Supporting sources | Notes |\n| --- | --- | --- |\n| Evidence strength | ${sources.length} sources | Stronger when multiple fetched pages agree. |\n| Risks / limitations | ${(run.gapAnalysis?.conflictSignals || []).length} signals | Treat controversy and snippet-only pages as weaker evidence. |\n| Coverage gaps | ${(run.gapAnalysis?.uncoveredTerms || []).join(', ') || 'None detected'} | Second pass runs when budget allows. |`;
+        }
+        if (run.reportFormat === 'recommendation') {
+            return `## Recommendation-Oriented Synthesis\n- Best supported direction: use the cited evidence below as the starting point, prioritizing higher-confidence fetched sources.\n- Decision cautions: ${this._gapSummary(run.gapAnalysis)}.\n- Next check: verify any critical claim from at least two sources before acting.\n\n## Supporting Evidence\n${evidence || 'No evidence notes recorded.'}`;
+        }
+        return `## Technical Synthesis\n- Sources analyzed: ${sources.length}\n- Deduplication: URL, normalized title, and content-similarity filters were applied before reading sources.\n- Budget: up to ${run.limits.maxSearches} searches, ${run.limits.maxSources} sources, ${run.limits.maxCharsPerSource} chars/source, ${run.limits.fetchTimeoutMs}ms fetch timeout.\n- Gap analysis: ${this._gapSummary(run.gapAnalysis)}.`;
+    }
+
+    _formatUncertainty(run, sources) {
+        const gap = run.gapAnalysis;
+        const lines = [];
+        if (!sources.length) lines.push('- Evidence is weak: no readable sources were stored.');
+        if (gap?.snippetOnlySources) lines.push(`- ${gap.snippetOnlySources} source(s) are snippet-only because full-text fetch failed or was blocked.`);
+        if (gap?.lowConfidenceSources) lines.push(`- ${gap.lowConfidenceSources} source(s) have low confidence due to short extracted text.`);
+        if (gap?.conflictSignals?.length) lines.push(`- Conflict/uncertainty language appeared in: ${gap.conflictSignals.map(item => item.title).join('; ')}.`);
+        if (gap?.uncoveredTerms?.length) lines.push(`- Query terms with weak coverage: ${gap.uncoveredTerms.slice(0, 8).join(', ')}.`);
+        if (!lines.length) lines.push('- No major automated uncertainty signals were detected; still verify important claims manually.');
+        return lines.join('\n');
     }
 
     async _recordStep(run, name, status, message) {
@@ -407,4 +574,4 @@ class DeepResearchService {
 }
 
 export const deepResearchService = new DeepResearchService();
-export { DEFAULT_LIMITS };
+export { DEFAULT_LIMITS, REPORT_FORMATS };
