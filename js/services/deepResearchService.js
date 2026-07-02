@@ -7,9 +7,12 @@ const DEFAULT_LIMITS = {
     maxSearches: 4,
     maxResultsPerSearch: 5,
     maxSources: 8,
+    maxLocalSources: 4,
     maxCharsPerSource: 9000,
     fetchTimeoutMs: 9000,
     enableSecondPass: true,
+    includeLocalDocuments: false,
+    localCollectionId: 'document-library',
     reportFormat: 'technical'
 };
 
@@ -100,9 +103,12 @@ class DeepResearchService {
             maxSearches: clampNumber(merged.maxSearches, 1, 8, DEFAULT_LIMITS.maxSearches),
             maxResultsPerSearch: clampNumber(merged.maxResultsPerSearch, 1, 10, DEFAULT_LIMITS.maxResultsPerSearch),
             maxSources: clampNumber(merged.maxSources, 1, 20, DEFAULT_LIMITS.maxSources),
+            maxLocalSources: clampNumber(merged.maxLocalSources, 1, 12, DEFAULT_LIMITS.maxLocalSources),
             maxCharsPerSource: clampNumber(merged.maxCharsPerSource, 1200, 30000, DEFAULT_LIMITS.maxCharsPerSource),
             fetchTimeoutMs: clampNumber(merged.fetchTimeoutMs, 2500, 30000, DEFAULT_LIMITS.fetchTimeoutMs),
             enableSecondPass: merged.enableSecondPass !== false,
+            includeLocalDocuments: merged.includeLocalDocuments === true,
+            localCollectionId: normalizeText(merged.localCollectionId || DEFAULT_LIMITS.localCollectionId) || DEFAULT_LIMITS.localCollectionId,
             reportFormat: REPORT_FORMATS.includes(merged.reportFormat) ? merged.reportFormat : DEFAULT_LIMITS.reportFormat
         };
     }
@@ -181,8 +187,17 @@ class DeepResearchService {
             await this._recordStep(run, 'searching', 'completed', `Collected ${results.length} unique candidate sources after URL/title/snippet deduplication.`);
 
             await this._recordStep(run, 'reading', 'running', 'Fetching and extracting source text.');
-            const sources = await this._fetchAndStoreSources(run, results);
+            const webBudget = run.limits.includeLocalDocuments
+                ? Math.max(1, run.limits.maxSources - run.limits.maxLocalSources)
+                : run.limits.maxSources;
+            const sources = await this._fetchAndStoreSources(run, results.slice(0, webBudget));
             await this._recordStep(run, 'reading', 'completed', `Stored ${sources.length} readable sources.`);
+
+            if (run.limits.includeLocalDocuments) {
+                await this._recordStep(run, 'local-documents', 'running', 'Searching uploaded-file RAG/document sources.');
+                const localSources = await this._collectLocalDocumentSources(run);
+                await this._recordStep(run, 'local-documents', 'completed', `Added ${localSources.length} local document source(s) from ${run.limits.localCollectionId}.`);
+            }
 
             if (run.limits.enableSecondPass) {
                 await this._recordStep(run, 'gap-analysis', 'running', 'Checking coverage, conflicts, weak evidence, and follow-up needs.');
@@ -221,7 +236,8 @@ class DeepResearchService {
                     id: source.id,
                     title: source.title,
                     url: source.url,
-                    type: 'web',
+                    type: source.sourceType || 'web',
+                    documentId: source.documentId || null,
                     notes: source.snippet || source.excerpt || '',
                     confidence: source.confidence
                 })),
@@ -229,7 +245,7 @@ class DeepResearchService {
                 intermediateFindings: run.findings,
                 body: run.report,
                 finalSynthesis: synthesis.summary,
-                citations: sourceRecords.map((source, index) => `[${index + 1}] ${source.title} — ${source.url}`),
+                citations: sourceRecords.map((source, index) => this._citationLine(source, index)),
                 completedAt: run.completedAt,
                 createdAt: run.createdAt
             });
@@ -296,7 +312,7 @@ class DeepResearchService {
             await this._saveRun(run);
             if (all.length >= run.limits.maxSources) break;
         }
-        if (!all.length) throw new Error('No web search results were collected. Check Settings → Web Search provider/API key or local SearXNG.');
+        if (!all.length && !run.limits.includeLocalDocuments) throw new Error('No web search results were collected. Check Settings → Web Search provider/API key or local SearXNG.');
         return all;
     }
 
@@ -400,6 +416,10 @@ class DeepResearchService {
                 url: result.url || '',
                 normalizedUrl: normalizeUrl(result.url),
                 normalizedTitle: normalizeTitle(result.title),
+                sourceType: result.sourceType || 'web',
+                documentId: result.documentId || null,
+                collectionId: result.collectionId || null,
+                chunkId: result.chunkId || null,
                 snippet: result.snippet || '',
                 searchQuery: result.searchQuery,
                 secondPass: Boolean(result.secondPass),
@@ -407,14 +427,16 @@ class DeepResearchService {
                 content: '',
                 excerpt: '',
                 wordCount: 0,
-                confidence: 0.55,
+                confidence: result.confidence || 0.55,
                 createdAt: now(),
                 updatedAt: now()
             };
             try {
                 source.status = 'fetching';
                 await putRecord('deepResearchSources', source);
-                const content = await this._fetchReadableText(source.url, run.limits.fetchTimeoutMs);
+                const content = source.sourceType === 'local-document'
+                    ? normalizeText(result.content || result.snippet || '')
+                    : await this._fetchReadableText(source.url, run.limits.fetchTimeoutMs);
                 source.content = content.slice(0, run.limits.maxCharsPerSource);
                 source.excerpt = this._bestExcerpt(source.content || source.snippet, run.query);
                 source.wordCount = source.content.split(/\s+/).filter(Boolean).length;
@@ -436,6 +458,63 @@ class DeepResearchService {
             sources.push(source);
         }
         return sources;
+    }
+
+    async _collectLocalDocumentSources(run) {
+        const candidates = await this._searchLocalDocuments(run.query, run.limits.localCollectionId, run.limits.maxLocalSources);
+        if (!candidates.length) return [];
+        return this._fetchAndStoreSources(run, candidates.map((candidate, index) => ({
+            ...candidate,
+            rank: run.sourceIds.length + index + 1,
+            sourceType: 'local-document',
+            searchQuery: `local:${run.limits.localCollectionId}`
+        })));
+    }
+
+    async _searchLocalDocuments(query, collectionId, maxLocalSources) {
+        const docs = await getAllRecords('ragDocuments');
+        const chunks = await getAllRecords('ragChunks');
+        const scopedDocs = docs.filter(doc => !collectionId || doc.collectionId === collectionId || doc.chatId === collectionId || collectionId === 'all');
+        const byDocument = new Map();
+        for (const doc of scopedDocs) {
+            const text = normalizeText(doc.content || doc.text || doc.summary || '');
+            if (text) {
+                byDocument.set(doc.id, {
+                    id: doc.id,
+                    title: doc.title || doc.name || doc.id,
+                    collectionId: doc.collectionId || doc.chatId || collectionId,
+                    content: text,
+                    metadata: doc.metadata || {}
+                });
+            }
+        }
+        for (const chunk of chunks) {
+            const doc = scopedDocs.find(item => item.id === chunk.documentId);
+            if (!doc) continue;
+            const existing = byDocument.get(doc.id) || {
+                id: doc.id,
+                title: doc.title || doc.name || doc.id,
+                collectionId: doc.collectionId || doc.chatId || collectionId,
+                content: '',
+                metadata: doc.metadata || {}
+            };
+            existing.content = normalizeText(`${existing.content}\n\n${chunk.text || ''}`);
+            byDocument.set(doc.id, existing);
+        }
+        const scored = [...byDocument.values()]
+            .map(doc => ({ ...doc, score: jaccardSimilarity(query, `${doc.title} ${doc.content}`) }))
+            .filter(doc => doc.content && doc.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, maxLocalSources);
+        return scored.map(doc => ({
+            title: doc.title,
+            url: `synapse://rag/${encodeURIComponent(doc.id)}`,
+            snippet: this._bestExcerpt(doc.content, query),
+            content: doc.content,
+            documentId: doc.id,
+            collectionId: doc.collectionId,
+            confidence: Math.min(0.9, Math.max(0.58, doc.score + 0.45))
+        }));
     }
 
     async _fetchReadableText(url, timeoutMs) {
@@ -509,21 +588,32 @@ class DeepResearchService {
 
     _synthesizeReport(run, sources) {
         const usable = sources.filter(source => source.excerpt || source.snippet);
+        const localCount = usable.filter(source => source.sourceType === 'local-document').length;
+        const webCount = usable.length - localCount;
         const notes = usable.map((source, index) => ({
             sourceId: source.id,
+            type: source.sourceType || 'web',
             text: `[${index + 1}] ${source.title}: ${source.excerpt || source.snippet}`
         }));
         const findings = usable.slice(0, 8).map((source, index) => `${index + 1}. ${source.title} suggests: ${(source.excerpt || source.snippet || '').slice(0, 280)}`);
-        const sourceList = usable.map((source, index) => `${index + 1}. ${source.title} — ${source.url}`).join('\n');
+        const sourceList = usable.map((source, index) => this._citationLine(source, index)).join('\n');
         const summary = usable.length
-            ? `Reviewed ${usable.length} web sources for “${run.query}” with ${run.reportFormat} formatting. Source quality is mixed; verify critical claims before acting because synthesis is deterministic and browser fetches can be CORS-limited.`
+            ? `Reviewed ${usable.length} sources (${webCount} web, ${localCount} local document) for “${run.query}” with ${run.reportFormat} formatting. Source quality is mixed; verify critical claims before acting because synthesis is deterministic and browser fetches can be CORS-limited.`
             : `No readable sources were available for “${run.query}”.`;
-        const evidence = usable.map((source, index) => `- [${index + 1}] **${source.title}** (${Math.round((source.confidence || 0) * 100)}% confidence): ${source.excerpt || source.snippet || 'No excerpt available.'}`).join('\n');
+        const evidence = usable.map((source, index) => `- [${index + 1}] **${source.title}** (${source.sourceType === 'local-document' ? 'local document' : 'web'}, ${Math.round((source.confidence || 0) * 100)}% confidence): ${source.excerpt || source.snippet || 'No excerpt available.'}`).join('\n');
         const uncertainty = this._formatUncertainty(run, usable);
         const formatSection = this._formatReportBody(run, usable, evidence);
         const gaps = run.searches.filter(search => search.error).map(search => `- Search failed for “${search.query}”: ${search.error}`).join('\n') || '- No failed searches recorded. CORS may still limit full-text extraction for some web pages.';
-        const report = `# ${run.title}\n\n## Query\n${run.query}\n\n## Executive Summary\n${summary}\n\n## Research Plan\n${run.plan.map(item => `- ${item.subquestion} (${item.searchQuery})`).join('\n')}\n\n${formatSection}\n\n## Evidence Notes\n${evidence || 'No evidence notes recorded.'}\n\n## Uncertainty, Conflicts, and Gaps\n${uncertainty}\n\n${gaps}\n\n## Sources\n${sourceList || 'No sources recorded.'}\n`;
+        const report = `# ${run.title}\n\n## Query\n${run.query}\n\n## Executive Summary\n${summary}\n\n## Source Mix\n- Web sources: ${webCount}\n- Uploaded/local document sources: ${localCount}\n- Local source pool: ${run.limits.includeLocalDocuments ? run.limits.localCollectionId : 'disabled'}\n\n## Research Plan\n${run.plan.map(item => `- ${item.subquestion} (${item.searchQuery})`).join('\n')}\n\n${formatSection}\n\n## Evidence Notes\n${evidence || 'No evidence notes recorded.'}\n\n## Uncertainty, Conflicts, and Gaps\n${uncertainty}\n\n${gaps}\n\n## Sources\n${sourceList || 'No sources recorded.'}\n`;
         return { notes, findings, summary, report };
+    }
+
+    _citationLine(source, index) {
+        const number = index + 1;
+        if (source.sourceType === 'local-document') {
+            return `[${number}] ${source.title} — local document (${source.collectionId || 'document-library'}${source.documentId ? ` / ${source.documentId}` : ''})`;
+        }
+        return `[${number}] ${source.title} — ${source.url || 'No URL'}`;
     }
 
     _formatReportBody(run, sources, evidence) {
@@ -536,7 +626,7 @@ class DeepResearchService {
         if (run.reportFormat === 'recommendation') {
             return `## Recommendation-Oriented Synthesis\n- Best supported direction: use the cited evidence below as the starting point, prioritizing higher-confidence fetched sources.\n- Decision cautions: ${this._gapSummary(run.gapAnalysis)}.\n- Next check: verify any critical claim from at least two sources before acting.\n\n## Supporting Evidence\n${evidence || 'No evidence notes recorded.'}`;
         }
-        return `## Technical Synthesis\n- Sources analyzed: ${sources.length}\n- Deduplication: URL, normalized title, and content-similarity filters were applied before reading sources.\n- Budget: up to ${run.limits.maxSearches} searches, ${run.limits.maxSources} sources, ${run.limits.maxCharsPerSource} chars/source, ${run.limits.fetchTimeoutMs}ms fetch timeout.\n- Gap analysis: ${this._gapSummary(run.gapAnalysis)}.`;
+        return `## Technical Synthesis\n- Sources analyzed: ${sources.length}\n- Deduplication: URL, normalized title, and content-similarity filters were applied before reading sources.\n- Budget: up to ${run.limits.maxSearches} web searches, ${run.limits.maxSources} total sources, ${run.limits.maxLocalSources} local document sources, ${run.limits.maxCharsPerSource} chars/source, ${run.limits.fetchTimeoutMs}ms fetch timeout.\n- Local documents: ${run.limits.includeLocalDocuments ? `enabled from ${run.limits.localCollectionId}` : 'disabled'}.\n- Gap analysis: ${this._gapSummary(run.gapAnalysis)}.`;
     }
 
     _formatUncertainty(run, sources) {

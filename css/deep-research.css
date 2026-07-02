@@ -276,8 +276,24 @@
 }
 
 .deep-research-source span,
-.deep-research-source p {
+.deep-research-source p,
+.deep-research-source-ref {
     color: var(--text-secondary, #a8a8b3);
+}
+
+.deep-research-source em {
+    color: var(--accent-color, #58a6ff);
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.72rem;
+}
+
+.deep-research-source-ref {
+    display: block;
+    margin-top: 0.35rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    word-break: break-all;
 }
 
 .deep-research-source a {

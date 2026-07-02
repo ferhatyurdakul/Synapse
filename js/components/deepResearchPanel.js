@@ -48,6 +48,8 @@ class DeepResearchPanel {
                             <div class="deep-research-limit-grid">
                                 <label>Searches <input id="deep-research-max-searches" type="number" min="1" max="8" value="4"></label>
                                 <label>Sources <input id="deep-research-max-sources" type="number" min="1" max="20" value="8"></label>
+                                <label>Local docs <input id="deep-research-max-local" type="number" min="1" max="12" value="4"></label>
+                                <label>RAG pool <input id="deep-research-local-pool" type="text" value="document-library" placeholder="document-library, chat id, or all"></label>
                                 <label>Chars/source <input id="deep-research-max-chars" type="number" min="1200" max="30000" step="500" value="9000"></label>
                                 <label>Timeout ms <input id="deep-research-timeout" type="number" min="2500" max="30000" step="500" value="9000"></label>
                             </div>
@@ -60,6 +62,7 @@ class DeepResearchPanel {
                                 </select>
                             </label>
                             <label class="deep-research-checkbox"><input id="deep-research-second-pass" type="checkbox" checked> Run gap analysis + second pass when needed</label>
+                            <label class="deep-research-checkbox"><input id="deep-research-local-docs" type="checkbox"> Include uploaded/local RAG documents</label>
                             <button id="deep-research-start" class="deep-research-primary" type="submit"><i data-lucide="rocket" class="icon"></i> Start Research</button>
                         </form>
                         <div class="deep-research-history-head">
@@ -112,9 +115,12 @@ class DeepResearchPanel {
         const limits = {
             maxSearches: Number(this.modal.querySelector('#deep-research-max-searches').value) || 4,
             maxSources: Number(this.modal.querySelector('#deep-research-max-sources').value) || 8,
+            maxLocalSources: Number(this.modal.querySelector('#deep-research-max-local').value) || 4,
             maxCharsPerSource: Number(this.modal.querySelector('#deep-research-max-chars').value) || 9000,
             fetchTimeoutMs: Number(this.modal.querySelector('#deep-research-timeout').value) || 9000,
             enableSecondPass: this.modal.querySelector('#deep-research-second-pass').checked,
+            includeLocalDocuments: this.modal.querySelector('#deep-research-local-docs').checked,
+            localCollectionId: this.modal.querySelector('#deep-research-local-pool').value.trim() || 'document-library',
             reportFormat: this.modal.querySelector('#deep-research-format').value || 'technical'
         };
         try {
@@ -190,8 +196,10 @@ class DeepResearchPanel {
         const plan = (run.plan || []).map(item => `<li><strong>${escapeHtml(item.subquestion)}</strong><br><span>${escapeHtml(item.searchQuery)} · ${escapeHtml(statusLabel(item.status))}</span></li>`).join('') || '<li>No plan recorded.</li>';
         const sources = this.activeSources.map((source, index) => `
             <article class="deep-research-source">
-                <div><strong>[${index + 1}] ${escapeHtml(source.title)}</strong><span>${escapeHtml(statusLabel(source.status))} · ${source.wordCount || 0} words</span></div>
-                ${source.url ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">open</a>` : ''}
+                <div><strong>[${index + 1}] ${escapeHtml(source.title)}</strong><span><em>${source.sourceType === 'local-document' ? 'local document' : 'web'}</em> · ${escapeHtml(statusLabel(source.status))} · ${source.wordCount || 0} words</span></div>
+                ${source.sourceType === 'local-document'
+                    ? `<small class="deep-research-source-ref">${escapeHtml(source.collectionId || 'document-library')} · ${escapeHtml(source.documentId || 'local')}</small>`
+                    : (source.url ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">open</a>` : '')}
                 <p>${escapeHtml(source.excerpt || source.snippet || source.error || 'No excerpt.')}</p>
             </article>
         `).join('') || '<p class="deep-research-muted">No sources stored yet.</p>';
@@ -203,6 +211,7 @@ class DeepResearchPanel {
                     <div class="deep-research-badges">
                         <span>${escapeHtml(statusLabel(run.status))}</span>
                         <span>${(run.sourceIds || []).length} sources</span>
+                        ${run.limits?.includeLocalDocuments ? `<span>Local pool: ${escapeHtml(run.limits.localCollectionId || 'document-library')}</span>` : ''}
                         <span>${formatDate(run.createdAt)}</span>
                         ${run.reportId ? `<span>Report: ${escapeHtml(run.reportId)}</span>` : ''}
                     </div>
